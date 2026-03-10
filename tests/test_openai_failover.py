@@ -53,3 +53,28 @@ async def test_async_failover_all_fail():
         
         with pytest.raises(Exception, match="error2"):
             await client.chat.completions.create(models=["gpt-4", "gpt-3.5-turbo"], messages=[])
+
+def test_responses_sync_failover():
+    client = OpenAI(api_key="test")
+    with patch('openai.resources.responses.Responses.create') as mock_create:
+        mock_create.side_effect = [Exception("error1"), "success"]
+        
+        result = client.responses.create(models=["gpt-4", "gpt-3.5-turbo"], input="hello")
+        
+        assert result == "success"
+        assert mock_create.call_count == 2
+        mock_create.assert_any_call(model="gpt-4", input="hello")
+        mock_create.assert_any_call(model="gpt-3.5-turbo", input="hello")
+
+@pytest.mark.asyncio
+async def test_responses_async_failover():
+    client = AsyncOpenAI(api_key="test")
+    with patch('openai.resources.responses.AsyncResponses.create', new_callable=AsyncMock) as mock_create:
+        mock_create.side_effect = [Exception("error1"), "success"]
+        
+        result = await client.responses.create(models=["gpt-4", "gpt-3.5-turbo"], input="hello")
+        
+        assert result == "success"
+        assert mock_create.call_count == 2
+        mock_create.assert_any_call(model="gpt-4", input="hello")
+        mock_create.assert_any_call(model="gpt-3.5-turbo", input="hello")

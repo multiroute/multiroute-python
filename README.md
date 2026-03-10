@@ -59,7 +59,7 @@ asyncio.run(main())
 
 ## How It Works
 
-The library subclasses the standard `OpenAI` client and overrides the `chat.completions.create` method. When you provide a `models` argument:
+The library subclasses the standard `OpenAI` client and overrides the `chat.completions.create` and `responses.create` methods. When you provide a `models` argument:
 1. It attempts to call the API with the first model.
 2. If it encounters an exception, it catches it and moves to the next model.
 3. If all models fail, it raises the last exception encountered.
