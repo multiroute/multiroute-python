@@ -57,9 +57,35 @@ async def main():
 asyncio.run(main())
 ```
 
+### Other Providers
+`multiroute-python` also supports `anthropic` and `google-genai`. Just replace your standard imports with the `multiroute.providers` equivalents.
+
+**Anthropic:**
+```python
+from multiroute.providers.anthropic import Anthropic
+
+client = Anthropic(api_key="your-api-key")
+response = client.messages.create(
+    models=["claude-3-opus", "claude-3-sonnet"],
+    max_tokens=100,
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+```
+
+**Google GenAI:**
+```python
+from multiroute.providers.google_genai import Client
+
+client = Client(api_key="your-api-key")
+response = client.models.generate_content(
+    models=["gemini-1.5-pro", "gemini-1.5-flash"],
+    contents="Hello!"
+)
+```
+
 ## How It Works
 
-The library subclasses the standard `OpenAI` client and overrides the `chat.completions.create` and `responses.create` methods. When you provide a `models` argument:
+The library subclasses the standard `OpenAI`, `Anthropic`, and `Client` classes and overrides their main generation methods (`chat.completions.create`, `messages.create`, `models.generate_content`, etc.). When you provide a `models` argument:
 1. It attempts to call the API with the first model.
 2. If it encounters an exception, it catches it and moves to the next model.
 3. If all models fail, it raises the last exception encountered.
