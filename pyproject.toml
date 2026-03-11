@@ -1,7 +1,7 @@
 [project]
 name = "multiroute"
 version = "0.1.1"
-description = "Add your description here"
+description = "Official multiroute.ai SDK client with client-side failover for OpenAI, Anthropic, Google and other LLMs."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
