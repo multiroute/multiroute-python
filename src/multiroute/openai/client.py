@@ -1,12 +1,14 @@
 import os
+from typing import Any
+
 import openai
 from openai.resources.chat.completions import (
-    Completions as ChatCompletions,
     AsyncCompletions as AsyncChatCompletions,
 )
-from openai.resources.responses import Responses, AsyncResponses
-import httpx
-from typing import Any
+from openai.resources.chat.completions import (
+    Completions as ChatCompletions,
+)
+from openai.resources.responses import AsyncResponses, Responses
 
 MULTIROUTE_BASE_URL = "https://api.multiroute.ai/v1"
 

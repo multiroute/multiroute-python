@@ -1,3 +1,4 @@
+import json
 import os
 from typing import Any, Dict
 
@@ -86,26 +87,157 @@ def _anthropic_to_openai_request(kwargs: Dict[str, Any]) -> Dict[str, Any]:
             if isinstance(content, list):
                 # Convert anthropic text blocks to openai text content
                 openai_content = []
+                tool_calls = []
                 for block in content:
-                    if block["type"] == "text":
-                        openai_content.append({"type": "text", "text": block["text"]})
-                    elif block["type"] == "image":
+                    # Handle both dictionaries and Anthropic Pydantic models
+                    b_type = (
+                        block.get("type")
+                        if isinstance(block, dict)
+                        else getattr(block, "type", None)
+                    )
+
+                    if b_type == "text":
+                        b_text = (
+                            block.get("text")
+                            if isinstance(block, dict)
+                            else getattr(block, "text", "")
+                        )
+                        openai_content.append({"type": "text", "text": b_text})
+                    elif b_type == "image":
                         # Convert image block
-                        # Anthropic uses source: {type: "base64", media_type: "...", data: "..."}
-                        # OpenAI uses image_url: {"url": "data:image/...;base64,..."}
-                        mime = block["source"]["media_type"]
-                        data = block["source"]["data"]
+                        b_source = (
+                            block.get("source")
+                            if isinstance(block, dict)
+                            else getattr(block, "source", {})
+                        )
+                        b_mime = (
+                            b_source.get("media_type")
+                            if isinstance(b_source, dict)
+                            else getattr(b_source, "media_type", "")
+                        )
+                        b_data = (
+                            b_source.get("data")
+                            if isinstance(b_source, dict)
+                            else getattr(b_source, "data", "")
+                        )
                         openai_content.append(
                             {
                                 "type": "image_url",
-                                "image_url": {"url": f"data:{mime};base64,{data}"},
+                                "image_url": {"url": f"data:{b_mime};base64,{b_data}"},
                             }
                         )
-                messages.append({"role": msg["role"], "content": openai_content})
+                    elif b_type == "tool_use":
+                        # Assistant turn with tool call
+                        b_id = (
+                            block.get("id")
+                            if isinstance(block, dict)
+                            else getattr(block, "id", "")
+                        )
+                        b_name = (
+                            block.get("name")
+                            if isinstance(block, dict)
+                            else getattr(block, "name", "")
+                        )
+                        b_input = (
+                            block.get("input")
+                            if isinstance(block, dict)
+                            else getattr(block, "input", {})
+                        )
+                        tool_calls.append(
+                            {
+                                "id": b_id,
+                                "type": "function",
+                                "function": {
+                                    "name": b_name,
+                                    "arguments": json.dumps(b_input),
+                                },
+                            }
+                        )
+                    elif b_type == "tool_result":
+                        # Tool result back to model
+                        b_id = (
+                            block.get("tool_use_id")
+                            if isinstance(block, dict)
+                            else getattr(block, "tool_use_id", "")
+                        )
+                        b_content = (
+                            block.get("content", "")
+                            if isinstance(block, dict)
+                            else getattr(block, "content", "")
+                        )
+                        messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": b_id,
+                                "content": str(b_content),
+                            }
+                        )
+                        continue  # Skip appending to current role's content
+
+                if tool_calls:
+                    # OpenAI assistant message with tool_calls
+                    msg_obj = {"role": "assistant", "tool_calls": tool_calls}
+                    # If there's text content, OpenAI allows it alongside tool_calls
+                    # but it must be a string or a list of content parts.
+                    if openai_content:
+                        # Anthropic text blocks were already converted to OpenAI parts format
+                        msg_obj["content"] = (
+                            openai_content[0]["text"]
+                            if len(openai_content) == 1
+                            else openai_content
+                        )
+                    else:
+                        # OpenAI requires 'content' to be present (can be null) even if tool_calls are present
+                        msg_obj["content"] = None
+                    messages.append(msg_obj)
+                elif openai_content:
+                    # If this message ONLY contained tool_result blocks (which were already handled above)
+                    # and no text/image blocks, we don't want to append an empty user message.
+                    # But if there are content parts, append them.
+                    messages.append({"role": msg["role"], "content": openai_content})
+                elif (
+                    not tool_calls
+                    and not openai_content
+                    and any(m["role"] == "tool" for m in messages)
+                ):
+                    # Special case: If this turn ONLY contained tool_result blocks,
+                    # those have already been appended to 'messages' as role: 'tool'.
+                    # We do NOT append anything else for this turn.
+                    pass
+                elif not tool_calls and not openai_content:
+                    # No content blocks at all (shouldn't happen in valid Anthropic requests)
+                    pass
             else:
                 messages.append({"role": msg["role"], "content": content})
 
     openai_req["messages"] = messages
+
+    if "tools" in kwargs:
+        openai_tools = []
+        for tool in kwargs["tools"]:
+            openai_tools.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": tool["name"],
+                        "description": tool.get("description", ""),
+                        "parameters": tool.get("input_schema", {}),
+                    },
+                }
+            )
+        openai_req["tools"] = openai_tools
+
+    if "tool_choice" in kwargs:
+        tc = kwargs["tool_choice"]
+        if tc.get("type") == "auto":
+            openai_req["tool_choice"] = "auto"
+        elif tc.get("type") == "any":
+            openai_req["tool_choice"] = "required"
+        elif tc.get("type") == "tool":
+            openai_req["tool_choice"] = {
+                "type": "function",
+                "function": {"name": tc["name"]},
+            }
 
     if "max_tokens" in kwargs:
         openai_req["max_tokens"] = kwargs["max_tokens"]
@@ -129,12 +261,35 @@ def _openai_to_anthropic_response(openai_resp: Dict[str, Any]) -> Message:
     stop_reason = "end_turn"
     if finish_reason == "length":
         stop_reason = "max_tokens"
+    elif finish_reason == "tool_calls":
+        stop_reason = "tool_use"
     elif finish_reason == "stop":
         stop_reason = "end_turn"
 
     # Content
     content = message_data.get("content", "")
     content_blocks = [{"type": "text", "text": content}] if content else []
+
+    # Tool calls
+    tool_calls = message_data.get("tool_calls", [])
+    if tool_calls:
+        for tc in tool_calls:
+            # Safely parse arguments, they might be string or dict
+            try:
+                args = tc["function"]["arguments"]
+                if isinstance(args, str):
+                    args = json.loads(args)
+            except (json.JSONDecodeError, KeyError, TypeError):
+                args = {}
+
+            content_blocks.append(
+                {
+                    "type": "tool_use",
+                    "id": tc.get("id", ""),
+                    "name": tc["function"]["name"],
+                    "input": args,
+                }
+            )
 
     # Usage
     usage_data = openai_resp.get("usage", {})

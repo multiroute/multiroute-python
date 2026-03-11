@@ -1,3 +1,4 @@
+import json
 import os
 from typing import Any, Dict
 
@@ -5,6 +6,8 @@ import google.genai as genai
 import httpx
 import openai
 from google.genai import types
+from google.genai._transformers import t_tools
+from google.genai.types import FinishReason, GenerateContentResponseUsageMetadata
 
 MULTIROUTE_BASE_URL = "https://api.multiroute.ai/v1"
 
@@ -56,8 +59,45 @@ def _get_shared_async_openai_client() -> openai.AsyncOpenAI:
     return _shared_async_openai_client
 
 
+def _lower_dict_types(d: Any) -> Any:
+    """Helper to convert Google's UPPERCASE types to OpenAI's lowercase types."""
+    if not isinstance(d, dict):
+        return d
+    res = {}
+    for k, v in d.items():
+        if k == "type" and isinstance(v, str):
+            res[k] = v.lower()
+        elif isinstance(v, dict):
+            res[k] = _lower_dict_types(v)
+        elif isinstance(v, list):
+            res[k] = [
+                _lower_dict_types(item) if isinstance(item, dict) else item
+                for item in v
+            ]
+        else:
+            res[k] = v
+    return res
+
+
+def _schema_to_dict(schema: Any) -> Dict[str, Any]:
+    if not schema:
+        return {}
+    d = {}
+    if hasattr(schema, "type"):
+        d["type"] = schema.type.value if hasattr(schema.type, "value") else schema.type
+    if hasattr(schema, "description") and schema.description:
+        d["description"] = schema.description
+    if hasattr(schema, "properties") and schema.properties:
+        d["properties"] = {k: _schema_to_dict(v) for k, v in schema.properties.items()}
+    if hasattr(schema, "required") and schema.required:
+        d["required"] = schema.required
+    if hasattr(schema, "items") and schema.items:
+        d["items"] = _schema_to_dict(schema.items)
+    return d
+
+
 def _google_to_openai_request(
-    model: str, contents: Any, config: Any = None
+    model: str, contents: Any, config: Any = None, client: Any = None
 ) -> Dict[str, Any]:
     messages = []
 
@@ -68,36 +108,182 @@ def _google_to_openai_request(
             if isinstance(item, str):
                 messages.append({"role": "user", "content": item})
             elif hasattr(item, "role") and hasattr(item, "parts"):
+                # types.Content object
                 role = "user" if item.role == "user" else "assistant"
-                content_parts = []
+                content_text = ""
+                has_function_call = False
+                has_function_response = False
                 for part in item.parts:
-                    if hasattr(part, "text") and part.text:
-                        content_parts.append({"type": "text", "text": part.text})
+                    if hasattr(part, "function_call") and part.function_call:
+                        fc = part.function_call
+                        name = getattr(fc, "name", "")
+                        args = getattr(fc, "args", {})
+                        messages.append(
+                            {
+                                "role": "assistant",
+                                "tool_calls": [
+                                    {
+                                        "id": name,
+                                        "type": "function",
+                                        "function": {
+                                            "name": name,
+                                            "arguments": json.dumps(args),
+                                        },
+                                    }
+                                ],
+                            }
+                        )
+                        has_function_call = True
+                    elif hasattr(part, "function_response") and part.function_response:
+                        fr = part.function_response
+                        name = getattr(fr, "name", "")
+                        resp = getattr(fr, "response", {})
+                        messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": name,
+                                "content": json.dumps(resp),
+                            }
+                        )
+                        has_function_response = True
+                    elif hasattr(part, "text") and part.text:
+                        content_text += part.text
                     elif isinstance(part, dict) and "text" in part:
-                        content_parts.append({"type": "text", "text": part["text"]})
+                        content_text += part["text"]
+
+                if not has_function_call and not has_function_response and content_text:
+                    messages.append({"role": role, "content": content_text})
+                elif content_text and has_function_call:
+                    messages[-1]["content"] = content_text
+            elif hasattr(item, "function_call") and item.function_call:
+                # Bare Part with function_call
+                fc = item.function_call
+                name = getattr(fc, "name", "")
+                args = getattr(fc, "args", {})
                 messages.append(
                     {
-                        "role": role,
-                        "content": content_parts
-                        if len(content_parts) > 1
-                        else content_parts[0]["text"]
-                        if content_parts
-                        else "",
+                        "role": "assistant",
+                        "tool_calls": [
+                            {
+                                "id": name,
+                                "type": "function",
+                                "function": {
+                                    "name": name,
+                                    "arguments": json.dumps(args),
+                                },
+                            }
+                        ],
                     }
                 )
-            elif hasattr(item, "text"):
+            elif hasattr(item, "function_response") and item.function_response:
+                # Bare Part with function_response
+                fr = item.function_response
+                name = getattr(fr, "name", "")
+                resp = getattr(fr, "response", {})
+                messages.append(
+                    {"role": "tool", "tool_call_id": name, "content": json.dumps(resp)}
+                )
+            elif hasattr(item, "text") and item.text:
                 messages.append({"role": "user", "content": item.text})
             elif isinstance(item, dict):
                 role = item.get("role", "user")
                 role = "user" if role == "user" else "assistant"
                 parts = item.get("parts", [])
                 content_text = ""
+                has_function_response = False
+                has_function_call = False
                 for p in parts:
-                    if isinstance(p, dict) and "text" in p:
-                        content_text += p["text"]
-                    elif hasattr(p, "text"):
+                    if isinstance(p, dict):
+                        if "functionCall" in p or "function_call" in p:
+                            fc = p.get("functionCall") or p.get("function_call")
+                            name = (
+                                fc.get("name")
+                                if isinstance(fc, dict)
+                                else getattr(fc, "name", "")
+                            )
+                            args = (
+                                fc.get("args")
+                                if isinstance(fc, dict)
+                                else getattr(fc, "args", {})
+                            )
+                            messages.append(
+                                {
+                                    "role": "assistant",
+                                    "tool_calls": [
+                                        {
+                                            "id": name,
+                                            "type": "function",
+                                            "function": {
+                                                "name": name,
+                                                "arguments": json.dumps(args),
+                                            },
+                                        }
+                                    ],
+                                }
+                            )
+                            has_function_call = True
+                        elif "functionResponse" in p or "function_response" in p:
+                            fr = p.get("functionResponse") or p.get("function_response")
+                            name = (
+                                fr.get("name")
+                                if isinstance(fr, dict)
+                                else getattr(fr, "name", "")
+                            )
+                            resp = (
+                                fr.get("response")
+                                if isinstance(fr, dict)
+                                else getattr(fr, "response", {})
+                            )
+                            messages.append(
+                                {
+                                    "role": "tool",
+                                    "tool_call_id": name,  # OpenAI requires an ID, Google usually uses name
+                                    "content": json.dumps(resp),
+                                }
+                            )
+                            has_function_response = True
+                        elif "text" in p:
+                            content_text += p["text"]
+                    elif hasattr(p, "function_call") and p.function_call:
+                        fc = p.function_call
+                        name = getattr(fc, "name", "")
+                        args = getattr(fc, "args", {})
+                        messages.append(
+                            {
+                                "role": "assistant",
+                                "tool_calls": [
+                                    {
+                                        "id": name,
+                                        "type": "function",
+                                        "function": {
+                                            "name": name,
+                                            "arguments": json.dumps(args),
+                                        },
+                                    }
+                                ],
+                            }
+                        )
+                        has_function_call = True
+                    elif hasattr(p, "function_response") and p.function_response:
+                        fr = p.function_response
+                        name = getattr(fr, "name", "")
+                        resp = getattr(fr, "response", {})
+                        messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": name,
+                                "content": json.dumps(resp),
+                            }
+                        )
+                        has_function_response = True
+                    elif hasattr(p, "text") and p.text:
                         content_text += p.text
-                messages.append({"role": role, "content": content_text})
+
+                if not has_function_response and not has_function_call and content_text:
+                    messages.append({"role": role, "content": content_text})
+                elif content_text and has_function_call:
+                    # Assistant sent text AND tool call
+                    messages[-1]["content"] = content_text
 
     openai_req = {"model": model, "messages": messages}
 
@@ -124,6 +310,38 @@ def _google_to_openai_request(
             if hasattr(config, "stop_sequences") and config.stop_sequences is not None:
                 openai_req["stop"] = config.stop_sequences
 
+            if hasattr(config, "tools") and config.tools:
+                tools = config.tools
+                if client and hasattr(client, "_api_client"):
+                    # Use Google's internal transformer if we have a client instance
+                    try:
+                        g_tools = t_tools(client._api_client, tools)
+                        openai_tools = []
+                        for t in g_tools:
+                            if (
+                                hasattr(t, "function_declarations")
+                                and t.function_declarations
+                            ):
+                                for fd in t.function_declarations:
+                                    # Convert schema to dict and lowercase the types
+                                    params_dict = _schema_to_dict(fd.parameters)
+                                    params_dict = _lower_dict_types(params_dict)
+
+                                    openai_tools.append(
+                                        {
+                                            "type": "function",
+                                            "function": {
+                                                "name": fd.name,
+                                                "description": fd.description or "",
+                                                "parameters": params_dict,
+                                            },
+                                        }
+                                    )
+                        if openai_tools:
+                            openai_req["tools"] = openai_tools
+                    except Exception:
+                        pass  # Silently drop tools if conversion fails, let backend handle if possible
+
     return openai_req
 
 
@@ -136,21 +354,48 @@ def _openai_to_google_response(
 
     usage_data = openai_resp.get("usage", {})
 
-    parts = [types.Part(text=content)]
+    parts = []
+    if content:
+        parts.append(types.Part(text=content))
+
+    tool_calls = message_data.get("tool_calls", [])
+    if tool_calls:
+        for tc in tool_calls:
+            try:
+                args = tc["function"]["arguments"]
+                if isinstance(args, str):
+                    args = json.loads(args)
+            except (json.JSONDecodeError, KeyError, TypeError):
+                args = {}
+
+            parts.append(
+                types.Part(
+                    function_call=types.FunctionCall(
+                        name=tc["function"]["name"], args=args
+                    )
+                )
+            )
+
+    finish_reason_str = choice.get("finish_reason")
+    if finish_reason_str == "stop":
+        finish_reason = FinishReason.STOP
+    elif finish_reason_str == "length":
+        finish_reason = FinishReason.MAX_TOKENS
+    elif finish_reason_str == "tool_calls":
+        finish_reason = FinishReason.STOP
+    else:
+        finish_reason = FinishReason.OTHER
+
     candidate = types.Candidate(
         content=types.Content(role="model", parts=parts),
-        finish_reason="STOP"
-        if choice.get("finish_reason") == "stop"
-        else "MAX_TOKENS"
-        if choice.get("finish_reason") == "length"
-        else "OTHER",
+        finish_reason=finish_reason,
     )
 
     response = types.GenerateContentResponse(
         candidates=[candidate],
-        usage_metadata=types.UsageMetadata(
+        usage_metadata=GenerateContentResponseUsageMetadata(
             prompt_token_count=usage_data.get("prompt_tokens", 0),
-            response_token_count=usage_data.get("completion_tokens", 0),
+            candidates_token_count=usage_data.get("completion_tokens", 0),
             total_token_count=usage_data.get("total_tokens", 0),
         ),
         model_version=model,
@@ -172,7 +417,9 @@ class MultirouteModels:
             )
 
         try:
-            openai_req = _google_to_openai_request(model, contents, config)
+            openai_req = _google_to_openai_request(
+                model, contents, config, self._client
+            )
 
             client = _get_shared_openai_client().with_options(
                 api_key=os.environ.get("MULTIROUTE_API_KEY"),
@@ -204,7 +451,9 @@ class AsyncMultirouteModels:
             )
 
         try:
-            openai_req = _google_to_openai_request(model, contents, config)
+            openai_req = _google_to_openai_request(
+                model, contents, config, self._client
+            )
 
             client = _get_shared_async_openai_client().with_options(
                 api_key=os.environ.get("MULTIROUTE_API_KEY"),
