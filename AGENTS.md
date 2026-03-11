@@ -1,9 +1,9 @@
 # Agent Guidelines - multiroute-python
 
-This document provides essential information for autonomous agents working on the `multiroute-python` project.
+This document provides essential information for autonomous agents working on the `multiroute` project.
 
 ## Project Overview
-`multiroute-python` is a library that provides high-availability wrappers for major LLM providers (OpenAI, Anthropic, Google). It automatically routes requests through a proxy (`api.multiroute.ai`) when a `MULTIROUTE_API_KEY` is present, falling back to the original provider if the proxy fails.
+`multiroute` is a library that provides high-availability wrappers for major LLM providers (OpenAI, Anthropic, Google). It automatically routes requests through a proxy (`api.multiroute.ai`) when a `MULTIROUTE_API_KEY` is present, falling back to the original provider if the proxy fails.
 
 ## Build and Test Commands
 The project uses `uv` for dependency management and `pytest` for testing.
@@ -54,7 +54,7 @@ Most wrappers follow this pattern:
 ## Development Environment
 - Python Version: `>= 3.12`
 - Key Dependencies: `anthropic`, `google-genai`, `openai`, `httpx`.
-- Proxy URL: `https://api.multiroute.ai/v1`
+- Proxy URL: `https://api.multiroute.ai/openai/v1`
 
 ## Testing Guidelines
 - Use `respx` for mocking HTTP requests in tests.
