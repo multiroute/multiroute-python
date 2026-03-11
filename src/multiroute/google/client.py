@@ -30,6 +30,32 @@ def _is_multiroute_error(e: Exception) -> bool:
     return False
 
 
+_shared_openai_client = None
+_shared_async_openai_client = None
+
+
+def _get_shared_openai_client() -> openai.OpenAI:
+    global _shared_openai_client
+    if _shared_openai_client is None:
+        _shared_openai_client = openai.OpenAI(
+            base_url=MULTIROUTE_BASE_URL,
+            api_key=os.environ.get("MULTIROUTE_API_KEY") or "dummy",
+            max_retries=0,
+        )
+    return _shared_openai_client
+
+
+def _get_shared_async_openai_client() -> openai.AsyncOpenAI:
+    global _shared_async_openai_client
+    if _shared_async_openai_client is None:
+        _shared_async_openai_client = openai.AsyncOpenAI(
+            base_url=MULTIROUTE_BASE_URL,
+            api_key=os.environ.get("MULTIROUTE_API_KEY") or "dummy",
+            max_retries=0,
+        )
+    return _shared_async_openai_client
+
+
 def _google_to_openai_request(
     model: str, contents: Any, config: Any = None
 ) -> Dict[str, Any]:
@@ -148,13 +174,11 @@ class MultirouteModels:
         try:
             openai_req = _google_to_openai_request(model, contents, config)
 
-            with openai.OpenAI(
-                base_url=MULTIROUTE_BASE_URL,
+            client = _get_shared_openai_client().with_options(
                 api_key=os.environ.get("MULTIROUTE_API_KEY"),
                 timeout=kwargs.get("timeout", 60),
-                max_retries=0,
-            ) as client:
-                openai_resp_obj = client.chat.completions.create(**openai_req)
+            )
+            openai_resp_obj = client.chat.completions.create(**openai_req)
 
             openai_resp = openai_resp_obj.model_dump()
             return _openai_to_google_response(openai_resp, model)
@@ -182,13 +206,11 @@ class AsyncMultirouteModels:
         try:
             openai_req = _google_to_openai_request(model, contents, config)
 
-            async with openai.AsyncOpenAI(
-                base_url=MULTIROUTE_BASE_URL,
+            client = _get_shared_async_openai_client().with_options(
                 api_key=os.environ.get("MULTIROUTE_API_KEY"),
                 timeout=kwargs.get("timeout", 60),
-                max_retries=0,
-            ) as client:
-                openai_resp_obj = await client.chat.completions.create(**openai_req)
+            )
+            openai_resp_obj = await client.chat.completions.create(**openai_req)
 
             openai_resp = openai_resp_obj.model_dump()
             return _openai_to_google_response(openai_resp, model)
