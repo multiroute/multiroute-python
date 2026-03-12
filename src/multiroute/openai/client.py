@@ -10,6 +10,8 @@ from openai.resources.chat.completions import (
 )
 from openai.resources.responses import AsyncResponses, Responses
 
+from multiroute.models import resolve_model
+
 MULTIROUTE_BASE_URL = "https://api.multiroute.ai/openai/v1"
 
 
@@ -38,7 +40,7 @@ class MultirouteChatCompletions(ChatCompletions):
         )
 
         try:
-            multiroute_kwargs = {**kwargs, "model": "openai/" + kwargs["model"]}
+            multiroute_kwargs = {**kwargs, "model": resolve_model(kwargs["model"])}
             return ChatCompletions(temp_client).create(**multiroute_kwargs)
         except Exception as e:
             if _is_multiroute_error(e):
@@ -57,7 +59,7 @@ class AsyncMultirouteChatCompletions(AsyncChatCompletions):
         )
 
         try:
-            multiroute_kwargs = {**kwargs, "model": "openai/" + kwargs["model"]}
+            multiroute_kwargs = {**kwargs, "model": resolve_model(kwargs["model"])}
             return await AsyncChatCompletions(temp_client).create(**multiroute_kwargs)
         except Exception as e:
             if _is_multiroute_error(e):
@@ -75,7 +77,7 @@ class MultirouteResponses(Responses):
         )
 
         try:
-            multiroute_kwargs = {**kwargs, "model": "openai/" + kwargs["model"]}
+            multiroute_kwargs = {**kwargs, "model": resolve_model(kwargs["model"])}
             return Responses(temp_client).create(**multiroute_kwargs)
         except Exception as e:
             if _is_multiroute_error(e):
@@ -93,7 +95,7 @@ class AsyncMultirouteResponses(AsyncResponses):
         )
 
         try:
-            multiroute_kwargs = {**kwargs, "model": "openai/" + kwargs["model"]}
+            multiroute_kwargs = {**kwargs, "model": resolve_model(kwargs["model"])}
             return await AsyncResponses(temp_client).create(**multiroute_kwargs)
         except Exception as e:
             if _is_multiroute_error(e):

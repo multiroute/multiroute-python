@@ -9,6 +9,8 @@ from google.genai import types
 from google.genai._transformers import t_tools
 from google.genai.types import FinishReason, GenerateContentResponseUsageMetadata
 
+from multiroute.models import resolve_model
+
 MULTIROUTE_BASE_URL = "https://api.multiroute.ai/openai/v1"
 
 
@@ -285,7 +287,7 @@ def _google_to_openai_request(
                     # Assistant sent text AND tool call
                     messages[-1]["content"] = content_text
 
-    openai_req = {"model": "gemini/" + model, "messages": messages}
+    openai_req = {"model": resolve_model(model), "messages": messages}
 
     if config:
         if isinstance(config, dict):
