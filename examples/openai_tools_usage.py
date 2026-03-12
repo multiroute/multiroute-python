@@ -1,18 +1,13 @@
-import os
-from multiroute.openai import OpenAI
+import asyncio
+import json
 
-# 1. Set your API keys
-# Multiroute will attempt to use MULTIROUTE_API_KEY first.
-# If the proxy fails, it will fall back to OPENAI_API_KEY.
-os.environ["MULTIROUTE_API_KEY"] = os.environ.get(
-    "MULTIROUTE_API_KEY", "your-multiroute-key"
-)
-os.environ["OPENAI_API_KEY"] = os.environ.get("OPENAI_API_KEY", "your-openai-key")
+from multiroute.openai import AsyncOpenAI, OpenAI
 
-# 2. Initialize the wrapped client
-client = OpenAI()
+# Set your API keys via environment variables before running:
+#   export OPENAI_API_KEY="your-openai-key"
+#   export MULTIROUTE_API_KEY="your-multiroute-key"  # optional — enables proxy routing
 
-# 3. Define your tool in standard OpenAI format
+# Define your tool in standard OpenAI format
 tools = [
     {
         "type": "function",
@@ -34,46 +29,99 @@ tools = [
     }
 ]
 
-# 4. Create a chat completion with tools (First Turn)
-print("Sending request to Multiroute (OpenAI format - First Turn)...")
-messages = [{"role": "user", "content": "What's the weather like in Boston today?"}]
-response = client.chat.completions.create(
-    model="gpt-4o-mini",
-    messages=messages,
-    tools=tools,
-    tool_choice="auto",
-)
 
-# 5. Handle the response and provide tool result (Second Turn)
-message = response.choices[0].message
-messages.append(message)  # Add assistant's tool call message to history
+def sync_tools_example():
+    print("--- Sync: Tool Use ---")
+    client = OpenAI()
 
-if message.tool_calls:
-    print("\nModel decided to call a tool:")
-    for tool_call in message.tool_calls:
-        print(f" - Function Name: {tool_call.function.name}")
-        print(f" - Arguments: {tool_call.function.arguments}")
+    messages = [{"role": "user", "content": "What's the weather like in Boston today?"}]
 
-        # Simulate tool execution
-        tool_result = "Sunny, 22°C"
-        print(f" - Simulated Result: {tool_result}")
-
-        # Add tool result to history
-        messages.append(
-            {
-                "role": "tool",
-                "tool_call_id": tool_call.id,
-                "name": tool_call.function.name,
-                "content": tool_result,
-            }
-        )
-
-    # Get final response from model
-    print("\nSending tool result back to Multiroute (Second Turn)...")
-    final_response = client.chat.completions.create(
+    # First turn — model decides to call a tool
+    print("First turn: sending request...")
+    response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=messages,
+        tools=tools,
+        tool_choice="auto",
     )
-    print(f"\nFinal response: {final_response.choices[0].message.content}")
-else:
-    print(f"\nModel responded directly: {message.content}")
+
+    message = response.choices[0].message
+    messages.append(message)
+
+    if message.tool_calls:
+        for tool_call in message.tool_calls:
+            print(
+                f"  Tool call: {tool_call.function.name}({tool_call.function.arguments})"
+            )
+
+            # Simulate tool execution
+            tool_result = "Sunny, 22°C"
+            print(f"  Tool result: {tool_result}")
+
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "name": tool_call.function.name,
+                    "content": tool_result,
+                }
+            )
+
+        # Second turn — model uses the tool result to form a final answer
+        print("Second turn: sending tool result...")
+        final_response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=messages,
+        )
+        print(f"Final response: {final_response.choices[0].message.content}")
+    else:
+        print(f"Model responded directly: {message.content}")
+
+
+async def async_tools_example():
+    print("\n--- Async: Tool Use ---")
+    client = AsyncOpenAI()
+
+    messages = [{"role": "user", "content": "What's the weather like in London today?"}]
+
+    print("First turn: sending request...")
+    response = await client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=messages,
+        tools=tools,
+        tool_choice="auto",
+    )
+
+    message = response.choices[0].message
+    messages.append(message)
+
+    if message.tool_calls:
+        for tool_call in message.tool_calls:
+            args = json.loads(tool_call.function.arguments)
+            print(f"  Tool call: {tool_call.function.name}({args})")
+
+            tool_result = "Cloudy, 14°C"
+            print(f"  Tool result: {tool_result}")
+
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "name": tool_call.function.name,
+                    "content": tool_result,
+                }
+            )
+
+        print("Second turn: sending tool result...")
+        final_response = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=messages,
+        )
+        print(f"Final response: {final_response.choices[0].message.content}")
+    else:
+        print(f"Model responded directly: {message.content}")
+
+
+if __name__ == "__main__":
+    sync_tools_example()
+    asyncio.run(async_tools_example())

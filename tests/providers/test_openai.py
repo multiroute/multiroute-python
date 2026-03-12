@@ -568,3 +568,15 @@ async def test_async_responses_fallback_500(async_client):
 
     assert native_route.called
     assert response.id == "resp_abc123"
+
+
+def test_no_multiroute_key_warns(monkeypatch):
+    monkeypatch.delenv("MULTIROUTE_API_KEY", raising=False)
+    with pytest.warns(UserWarning, match="MULTIROUTE_API_KEY is not set"):
+        OpenAI(api_key="test-key")
+
+
+def test_async_no_multiroute_key_warns(monkeypatch):
+    monkeypatch.delenv("MULTIROUTE_API_KEY", raising=False)
+    with pytest.warns(UserWarning, match="MULTIROUTE_API_KEY is not set"):
+        AsyncOpenAI(api_key="test-key")

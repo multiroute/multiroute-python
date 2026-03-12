@@ -1,11 +1,18 @@
 import pytest
 import respx
 import httpx
+from httpx._content import AsyncIteratorByteStream, IteratorByteStream
 import json
 import openai
 import anthropic
 from multiroute.anthropic import Anthropic, AsyncAnthropic
 from multiroute.anthropic.client import MULTIROUTE_BASE_URL
+
+
+async def aiter_bytes(chunks: list):
+    """Async generator that yields byte chunks — for use with AsyncIteratorByteStream."""
+    for chunk in chunks:
+        yield chunk
 
 
 @pytest.fixture
@@ -786,3 +793,241 @@ def test_messages_non_multiroute_error_reraised(client):
             messages=[{"role": "user", "content": "Hello!"}],
             max_tokens=50,
         )
+
+
+# ---------------------------------------------------------------------------
+# Streaming tests
+# ---------------------------------------------------------------------------
+
+# SSE data for a simple two-chunk stream followed by [DONE]
+_SSE_CHUNK_1 = (
+    b'data: {"id":"chatcmpl-s1","object":"chat.completion.chunk","model":"gpt-4o",'
+    b'"choices":[{"index":0,"delta":{"role":"assistant","content":"Hello"},'
+    b'"finish_reason":null}]}\n\n'
+)
+_SSE_CHUNK_2 = (
+    b'data: {"id":"chatcmpl-s1","object":"chat.completion.chunk","model":"gpt-4o",'
+    b'"choices":[{"index":0,"delta":{"content":" world"},"finish_reason":null}]}\n\n'
+)
+_SSE_CHUNK_FINAL = (
+    b'data: {"id":"chatcmpl-s1","object":"chat.completion.chunk","model":"gpt-4o",'
+    b'"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\n'
+)
+_SSE_DONE = b"data: [DONE]\n\n"
+
+_ANTHROPIC_SSE_BODY = _SSE_CHUNK_1 + _SSE_CHUNK_2 + _SSE_CHUNK_FINAL + _SSE_DONE
+
+# Native Anthropic SSE format for fallback tests (when proxy fails and native is called)
+_NATIVE_ANTHROPIC_SSE_BODY = (
+    b"event: message_start\n"
+    b'data: {"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant",'
+    b'"content":[],"model":"claude-3-5-sonnet-20241022","stop_reason":null,"stop_sequence":null,'
+    b'"usage":{"input_tokens":10,"output_tokens":0}}}\n\n'
+    b"event: content_block_start\n"
+    b'data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}\n\n'
+    b"event: content_block_delta\n"
+    b'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello"}}\n\n'
+    b"event: content_block_stop\n"
+    b'data: {"type":"content_block_stop","index":0}\n\n'
+    b"event: message_delta\n"
+    b'data: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},'
+    b'"usage":{"output_tokens":1}}\n\n'
+    b"event: message_stop\n"
+    b'data: {"type":"message_stop"}\n\n'
+)
+
+
+@respx.mock
+def test_messages_stream_success(client):
+    """stream=True routes through the proxy and translates OpenAI SSE to Anthropic events."""
+    multiroute_route = respx.post(f"{MULTIROUTE_BASE_URL}/chat/completions").mock(
+        return_value=httpx.Response(
+            200,
+            stream=IteratorByteStream([_ANTHROPIC_SSE_BODY]),
+            headers={"Content-Type": "text/event-stream"},
+        )
+    )
+
+    anthropic_route = respx.post("https://api.anthropic.com/v1/messages").mock(
+        return_value=httpx.Response(200, json={})
+    )
+
+    stream = client.messages.create(
+        model="claude-3-5-sonnet-20241022",
+        messages=[{"role": "user", "content": "Hello!"}],
+        max_tokens=100,
+        stream=True,
+    )
+
+    # Verify proxy was called and native was NOT called
+    assert multiroute_route.called
+    assert not anthropic_route.called
+
+    # Verify stream=true was sent to the proxy
+    req_json = json.loads(multiroute_route.calls.last.request.content)
+    assert req_json["stream"] is True
+
+    # Collect events
+    events = list(stream)
+    event_types = [e.type for e in events]
+
+    assert "message_start" in event_types
+    assert "content_block_start" in event_types
+    assert "content_block_delta" in event_types
+    assert "content_block_stop" in event_types
+    assert "message_delta" in event_types
+    assert "message_stop" in event_types
+
+    # Check text deltas accumulate to "Hello world"
+    text_deltas = [e.delta.text for e in events if e.type == "content_block_delta"]
+    assert "".join(text_deltas) == "Hello world"
+
+    # Check stop reason
+    msg_delta = next(e for e in events if e.type == "message_delta")
+    assert msg_delta.delta.stop_reason == "end_turn"
+
+
+@respx.mock
+def test_messages_stream_fallback_500(client):
+    """stream=True falls back to native Anthropic when the proxy returns 500."""
+    multiroute_route = respx.post(f"{MULTIROUTE_BASE_URL}/chat/completions").mock(
+        return_value=httpx.Response(
+            500, json={"error": {"message": "Internal Server Error"}}
+        )
+    )
+
+    anthropic_route = respx.post("https://api.anthropic.com/v1/messages").mock(
+        return_value=httpx.Response(
+            200,
+            stream=IteratorByteStream([_NATIVE_ANTHROPIC_SSE_BODY]),
+            headers={"Content-Type": "text/event-stream"},
+        )
+    )
+
+    stream = client.messages.create(
+        model="claude-3-5-sonnet-20241022",
+        messages=[{"role": "user", "content": "Hello!"}],
+        max_tokens=100,
+        stream=True,
+    )
+
+    assert multiroute_route.called
+    assert anthropic_route.called
+
+    # The native Anthropic stream yields RawMessageStreamEvent objects
+    events = list(stream)
+    assert len(events) > 0
+
+
+@respx.mock
+def test_messages_stream_fallback_connection_error(client):
+    """stream=True falls back to native Anthropic when the proxy raises a connection error."""
+    multiroute_route = respx.post(f"{MULTIROUTE_BASE_URL}/chat/completions").mock(
+        side_effect=httpx.ConnectError("Connection refused")
+    )
+
+    anthropic_route = respx.post("https://api.anthropic.com/v1/messages").mock(
+        return_value=httpx.Response(
+            200,
+            stream=IteratorByteStream([_NATIVE_ANTHROPIC_SSE_BODY]),
+            headers={"Content-Type": "text/event-stream"},
+        )
+    )
+
+    stream = client.messages.create(
+        model="claude-3-5-sonnet-20241022",
+        messages=[{"role": "user", "content": "Hello!"}],
+        max_tokens=100,
+        stream=True,
+    )
+
+    assert multiroute_route.called
+    assert anthropic_route.called
+    events = list(stream)
+    assert len(events) > 0
+
+
+@respx.mock
+async def test_async_messages_stream_success(async_client):
+    """Async stream=True routes through the proxy and translates OpenAI SSE to Anthropic events."""
+    multiroute_route = respx.post(f"{MULTIROUTE_BASE_URL}/chat/completions").mock(
+        return_value=httpx.Response(
+            200,
+            stream=AsyncIteratorByteStream(aiter_bytes([_ANTHROPIC_SSE_BODY])),
+            headers={"Content-Type": "text/event-stream"},
+        )
+    )
+
+    anthropic_route = respx.post("https://api.anthropic.com/v1/messages").mock(
+        return_value=httpx.Response(200, json={})
+    )
+
+    stream = await async_client.messages.create(
+        model="claude-3-5-sonnet-20241022",
+        messages=[{"role": "user", "content": "Hello!"}],
+        max_tokens=100,
+        stream=True,
+    )
+
+    assert multiroute_route.called
+    assert not anthropic_route.called
+
+    req_json = json.loads(multiroute_route.calls.last.request.content)
+    assert req_json["stream"] is True
+
+    events = []
+    async for event in stream:
+        events.append(event)
+
+    event_types = [e.type for e in events]
+    assert "message_start" in event_types
+    assert "content_block_delta" in event_types
+    assert "message_stop" in event_types
+
+    text_deltas = [e.delta.text for e in events if e.type == "content_block_delta"]
+    assert "".join(text_deltas) == "Hello world"
+
+
+@respx.mock
+async def test_async_messages_stream_fallback_500(async_client):
+    """Async stream=True falls back to native Anthropic when proxy returns 500."""
+    multiroute_route = respx.post(f"{MULTIROUTE_BASE_URL}/chat/completions").mock(
+        return_value=httpx.Response(
+            500, json={"error": {"message": "Internal Server Error"}}
+        )
+    )
+
+    anthropic_route = respx.post("https://api.anthropic.com/v1/messages").mock(
+        return_value=httpx.Response(
+            200,
+            stream=AsyncIteratorByteStream(aiter_bytes([_NATIVE_ANTHROPIC_SSE_BODY])),
+            headers={"Content-Type": "text/event-stream"},
+        )
+    )
+
+    stream = await async_client.messages.create(
+        model="claude-3-5-sonnet-20241022",
+        messages=[{"role": "user", "content": "Hello!"}],
+        max_tokens=100,
+        stream=True,
+    )
+
+    assert multiroute_route.called
+    assert anthropic_route.called
+
+    events = []
+    async for event in stream:
+        events.append(event)
+    assert len(events) > 0
+
+
+def test_no_multiroute_key_warns(monkeypatch):
+    monkeypatch.delenv("MULTIROUTE_API_KEY", raising=False)
+    with pytest.warns(UserWarning, match="MULTIROUTE_API_KEY is not set"):
+        Anthropic(api_key="test-key")
+
+
+def test_async_no_multiroute_key_warns(monkeypatch):
+    monkeypatch.delenv("MULTIROUTE_API_KEY", raising=False)
+    with pytest.warns(UserWarning, match="MULTIROUTE_API_KEY is not set"):
+        AsyncAnthropic(api_key="test-key")

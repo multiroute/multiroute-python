@@ -1,5 +1,6 @@
 import copy
 import os
+import warnings
 
 try:
     import litellm
@@ -7,6 +8,11 @@ except ImportError:
     litellm = None
 
 MULTIROUTE_BASE_URL = "https://api.multiroute.ai/v1"
+
+_MISSING_KEY_MESSAGE = (
+    "MULTIROUTE_API_KEY is not set. Requests will go directly to the provider "
+    "without Multiroute high-availability routing."
+)
 
 
 def _is_multiroute_error(e: Exception) -> bool:
@@ -59,6 +65,7 @@ def completion(**kwargs):
 
     mr_api_key = os.environ.get("MULTIROUTE_API_KEY")
     if not mr_api_key:
+        warnings.warn(_MISSING_KEY_MESSAGE, UserWarning, stacklevel=2)
         return litellm.completion(**kwargs)
 
     mr_kwargs = copy.copy(kwargs)
@@ -82,6 +89,7 @@ async def acompletion(**kwargs):
 
     mr_api_key = os.environ.get("MULTIROUTE_API_KEY")
     if not mr_api_key:
+        warnings.warn(_MISSING_KEY_MESSAGE, UserWarning, stacklevel=2)
         return await litellm.acompletion(**kwargs)
 
     mr_kwargs = copy.copy(kwargs)

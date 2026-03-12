@@ -87,9 +87,10 @@ def test_litellm_completion_no_key(monkeypatch):
     with patch("multiroute.litellm.client.litellm.completion") as mock_completion:
         mock_completion.return_value = "direct_success"
 
-        response = completion(
-            model="claude-3-opus", messages=[{"role": "user", "content": "hello"}]
-        )
+        with pytest.warns(UserWarning, match="MULTIROUTE_API_KEY is not set"):
+            response = completion(
+                model="claude-3-opus", messages=[{"role": "user", "content": "hello"}]
+            )
 
         assert response == "direct_success"
         mock_completion.assert_called_once()
@@ -112,9 +113,10 @@ async def test_litellm_acompletion_no_key(monkeypatch):
     ) as mock_acompletion:
         mock_acompletion.return_value = "direct_async_success"
 
-        response = await acompletion(
-            model="gpt-4o", messages=[{"role": "user", "content": "hello"}]
-        )
+        with pytest.warns(UserWarning, match="MULTIROUTE_API_KEY is not set"):
+            response = await acompletion(
+                model="gpt-4o", messages=[{"role": "user", "content": "hello"}]
+            )
 
         assert response == "direct_async_success"
         mock_acompletion.assert_called_once()
