@@ -1,13 +1,16 @@
+import os
 import asyncio
+import json
 
 # Set the providers keys so litellm can fall back to the actual model if proxy fails
 # os.environ["OPENAI_API_KEY"] = "your-openai-api-key"
 # os.environ["ANTHROPIC_API_KEY"] = "your-anthropic-api-key"
+# os.environ["MULTIROUTE_API_KEY"] = "your-multiroute-api-key"
 
 # Instead of `from litellm import completion, acompletion`, use the multiroute wrapper:
 from multiroute.litellm import completion, acompletion
 
-# Define a tool in standard OpenAI format
+# Define a simple tool
 tools = [
     {
         "type": "function",
@@ -29,63 +32,68 @@ tools = [
     }
 ]
 
+def get_current_weather(location, unit="fahrenheit"):
+    """Mock weather function."""
+    return {"location": location, "temperature": "72", "unit": unit, "forecast": "sunny"}
 
-def sync_example():
-    print("--- Running Sync LiteLLM Example ---")
-
-    # This request will first try https://api.multiroute.ai/v1
-    # If that fails (5xx or connection error), it falls back natively through litellm
-    # to the correct provider (in this case, Anthropic due to the model name).
+async def run_weather_conversation():
+    print("--- Running Weather Tool Conversation ---")
+    
+    messages = [{"role": "user", "content": "What is the weather like in Boston?"}]
+    
+    # Step 1: Send the conversation and available tools to the model
     try:
-        response = completion(
-            model="claude-3-opus-20240229",
-            messages=[
-                {"role": "user", "content": "What is the weather like in Boston?"}
-            ],
-            tools=tools,
-            tool_choice="auto",
-        )
-        print(f"Model: {response.model}")
-
-        # The response format matches what users previously expected with litellm
-        message = response.choices[0].message
-
-        if hasattr(message, "tool_calls") and message.tool_calls:
-            print("Tool call returned by model:")
-            for tool_call in message.tool_calls:
-                print(f" - Function: {tool_call.function.name}")
-                print(f" - Arguments: {tool_call.function.arguments}")
-        else:
-            print(f"Response: {message.content}")
-
-    except Exception as e:
-        print(f"Error: {e}")
-
-
-async def async_example():
-    print("\n--- Running Async LiteLLM Example ---")
-
-    try:
+        print(f"Step 1: Asking model about weather...")
         response = await acompletion(
             model="gpt-4",
-            messages=[{"role": "user", "content": "What is the weather in Tokyo?"}],
+            messages=messages,
             tools=tools,
+            tool_choice="auto"
         )
-        print(f"Model: {response.model}")
-
-        message = response.choices[0].message
-        if hasattr(message, "tool_calls") and message.tool_calls:
-            print("Tool call returned by model:")
-            for tool_call in message.tool_calls:
-                print(f" - Function: {tool_call.function.name}")
-                print(f" - Arguments: {tool_call.function.arguments}")
+        
+        response_message = response.choices[0].message
+        messages.append(response_message)
+        
+        # Step 2: Check if the model wanted to call a tool
+        if hasattr(response_message, 'tool_calls') and response_message.tool_calls:
+            print("Model requested tool calls:")
+            
+            for tool_call in response_message.tool_calls:
+                function_name = tool_call.function.name
+                function_args = json.loads(tool_call.function.arguments)
+                
+                print(f" - Executing: {function_name}({function_args})")
+                
+                # Execute the mock tool
+                if function_name == "get_current_weather":
+                    function_response = get_current_weather(
+                        location=function_args.get("location"),
+                        unit=function_args.get("unit", "fahrenheit")
+                    )
+                    
+                    # Step 3: Send the tool result back to the model
+                    messages.append({
+                        "tool_call_id": tool_call.id,
+                        "role": "tool",
+                        "name": function_name,
+                        "content": json.dumps(function_response),
+                    })
+            
+            print("Step 2: Sending tool results back to model...")
+            second_response = await acompletion(
+                model="gpt-4",
+                messages=messages
+            )
+            
+            final_content = second_response.choices[0].message.content
+            print(f"Final response: {final_content}")
         else:
-            print(f"Response: {message.content}")
-
+            print(f"Response: {response_message.content}")
+            
     except Exception as e:
-        print(f"Error: {e}")
-
+        print(f"Error during conversation: {e}")
+        print("\nNote: To run this example successfully, ensure MULTIROUTE_API_KEY is set,")
+        print("or fallback keys (like OPENAI_API_KEY) are provided.")
 
 if __name__ == "__main__":
-    sync_example()
-    asyncio.run(async_example())
+    asyncio.run(run_weather_conversation())
