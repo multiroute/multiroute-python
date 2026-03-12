@@ -1,6 +1,6 @@
 import os
 import asyncio
-from multiroute import GoogleClient
+from multiroute.google import Client as GoogleClient
 
 # Set your API keys
 # os.environ["MULTIROUTE_API_KEY"] = "your_multiroute_key"

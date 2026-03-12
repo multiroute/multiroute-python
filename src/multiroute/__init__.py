@@ -1,5 +1,8 @@
-from .google import Client as GoogleClient
-from .openai import OpenAI
-from .anthropic import Anthropic
+"""Official multiroute.ai SDK — use submodules for provider clients.
 
-__all__ = ["GoogleClient", "OpenAI", "Anthropic"]
+- OpenAI:  from multiroute.openai import OpenAI, AsyncOpenAI
+- Anthropic:  from multiroute.anthropic import Anthropic, AsyncAnthropic
+- Google:  from multiroute.google import Client
+"""
+
+__all__: list[str] = []

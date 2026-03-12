@@ -21,16 +21,27 @@ When it **is** set, requests first go through Multiroute; if the proxy returns a
 
 ### Installation
 
-Install from PyPI:
+Install from PyPI. The base install includes the OpenAI client and proxy support:
 
 ```bash
 pip install multiroute
+```
+
+For Anthropic or Google support, install the corresponding extra:
+
+```bash
+pip install multiroute[anthropic]   # Anthropic client
+pip install multiroute[google]      # Google client
+pip install multiroute[all]         # All providers
 ```
 
 Or with `uv`:
 
 ```bash
 uv add multiroute
+uv add "multiroute[anthropic]"   # optional: Anthropic
+uv add "multiroute[google]"      # optional: Google
+uv add "multiroute[all]"         # optional: all providers
 ```
 
 ### Configuration
@@ -52,7 +63,7 @@ If `MULTIROUTE_API_KEY` is unset, the library is effectively a no-op wrapper aro
 #### OpenAI
 
 ```python
-from multiroute import OpenAI
+from multiroute.openai import OpenAI
 
 client = OpenAI()
 
@@ -82,7 +93,7 @@ async def main() -> None:
 #### Anthropic
 
 ```python
-from multiroute import Anthropic
+from multiroute.anthropic import Anthropic
 
 client = Anthropic()
 
@@ -96,7 +107,7 @@ response = client.messages.create(
 #### Google
 
 ```python
-from multiroute import GoogleClient
+from multiroute.google import Client as GoogleClient
 
 client = GoogleClient()
 model = client.models.generate_content

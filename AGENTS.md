@@ -53,7 +53,7 @@ Most wrappers follow this pattern:
 
 ## Development Environment
 - Python Version: `>= 3.12`
-- Key Dependencies: `anthropic`, `google-genai`, `openai`, `httpx`.
+- Core dependency: `openai` (used for the OpenAI client and for talking to the multiroute.ai proxy). Optional extras: `anthropic`, `google-genai` (install with `multiroute[anthropic]`, `multiroute[google]`, or `multiroute[all]`). Dev and tests use `multiroute[all]`.
 - Proxy URL: `https://api.multiroute.ai/openai/v1`
 
 ## Testing Guidelines
