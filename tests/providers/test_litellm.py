@@ -1,7 +1,12 @@
 import pytest
 from unittest.mock import patch, AsyncMock
 import httpx
-from litellm.exceptions import InternalServerError, APIConnectionError
+from litellm.exceptions import (
+    InternalServerError,
+    APIConnectionError,
+    NotFoundError,
+    Timeout,
+)
 
 from multiroute.litellm import completion, acompletion
 
@@ -201,3 +206,57 @@ def test_litellm_completion_unknown_model_unchanged(mock_env):
         kwargs = mock_completion.call_args.kwargs
         # Unknown model stays unprefixed
         assert kwargs["model"] == "my-custom-local-llm"
+
+
+# ---------------------------------------------------------------------------
+# 404 fallback
+# ---------------------------------------------------------------------------
+
+
+def test_litellm_completion_404_fallback(mock_env):
+    """A NotFoundError (404) from the proxy triggers fallback to native litellm."""
+    with patch("multiroute.litellm.client.litellm.completion") as mock_completion:
+        error = NotFoundError(
+            message="Not Found",
+            model="gpt-4o",
+            llm_provider="openai",
+        )
+        mock_completion.side_effect = [error, "404_fallback_success"]
+
+        response = completion(
+            model="gpt-4o", messages=[{"role": "user", "content": "hello"}]
+        )
+
+        assert response == "404_fallback_success"
+        assert mock_completion.call_count == 2
+
+        fallback_kwargs = mock_completion.call_args_list[1].kwargs
+        assert "api_base" not in fallback_kwargs
+        assert "custom_llm_provider" not in fallback_kwargs
+
+
+# ---------------------------------------------------------------------------
+# Timeout fallback
+# ---------------------------------------------------------------------------
+
+
+def test_litellm_completion_timeout_fallback(mock_env):
+    """A Timeout error from the proxy triggers fallback to native litellm."""
+    with patch("multiroute.litellm.client.litellm.completion") as mock_completion:
+        error = Timeout(
+            message="Request timed out",
+            model="gpt-4o",
+            llm_provider="openai",
+        )
+        mock_completion.side_effect = [error, "timeout_fallback_success"]
+
+        response = completion(
+            model="gpt-4o", messages=[{"role": "user", "content": "hello"}]
+        )
+
+        assert response == "timeout_fallback_success"
+        assert mock_completion.call_count == 2
+
+        fallback_kwargs = mock_completion.call_args_list[1].kwargs
+        assert "api_base" not in fallback_kwargs
+        assert "custom_llm_provider" not in fallback_kwargs

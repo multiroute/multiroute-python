@@ -32,7 +32,7 @@ def test_chat_completions_success(client):
                 "id": "chatcmpl-123",
                 "object": "chat.completion",
                 "created": 1677652288,
-                "model": "gpt-3.5-turbo-0125",
+                "model": "gpt-4o-mini",
                 "system_fingerprint": "fp_44709d6fcb",
                 "choices": [
                     {
@@ -56,7 +56,7 @@ def test_chat_completions_success(client):
     )
 
     response = client.chat.completions.create(
-        model="gpt-3.5-turbo", messages=[{"role": "user", "content": "Hello!"}]
+        model="gpt-4o-mini", messages=[{"role": "user", "content": "Hello!"}]
     )
 
     assert response.choices[0].message.content == "Hello there!"
@@ -85,7 +85,7 @@ def test_chat_completions_fallback_500(client):
                 "id": "chatcmpl-123",
                 "object": "chat.completion",
                 "created": 1677652288,
-                "model": "gpt-3.5-turbo-0125",
+                "model": "gpt-4o-mini",
                 "system_fingerprint": "fp_44709d6fcb",
                 "choices": [
                     {
@@ -108,7 +108,7 @@ def test_chat_completions_fallback_500(client):
     )
 
     response = client.chat.completions.create(
-        model="gpt-3.5-turbo", messages=[{"role": "user", "content": "Hello!"}]
+        model="gpt-4o-mini", messages=[{"role": "user", "content": "Hello!"}]
     )
 
     assert response.choices[0].message.content == "Fallback response!"
@@ -129,7 +129,7 @@ def test_chat_completions_fallback_connection_error(client):
                 "id": "chatcmpl-123",
                 "object": "chat.completion",
                 "created": 1677652288,
-                "model": "gpt-3.5-turbo-0125",
+                "model": "gpt-4o-mini",
                 "system_fingerprint": "fp_44709d6fcb",
                 "choices": [
                     {
@@ -152,7 +152,7 @@ def test_chat_completions_fallback_connection_error(client):
     )
 
     response = client.chat.completions.create(
-        model="gpt-3.5-turbo", messages=[{"role": "user", "content": "Hello!"}]
+        model="gpt-4o-mini", messages=[{"role": "user", "content": "Hello!"}]
     )
 
     assert (
@@ -180,7 +180,7 @@ async def test_async_chat_completions_fallback_500(async_client):
                 "id": "chatcmpl-123",
                 "object": "chat.completion",
                 "created": 1677652288,
-                "model": "gpt-3.5-turbo-0125",
+                "model": "gpt-4o-mini",
                 "system_fingerprint": "fp_44709d6fcb",
                 "choices": [
                     {
@@ -203,7 +203,7 @@ async def test_async_chat_completions_fallback_500(async_client):
     )
 
     response = await async_client.chat.completions.create(
-        model="gpt-3.5-turbo", messages=[{"role": "user", "content": "Hello!"}]
+        model="gpt-4o-mini", messages=[{"role": "user", "content": "Hello!"}]
     )
 
     assert response.choices[0].message.content == "Async Fallback response!"
@@ -232,7 +232,7 @@ def test_chat_completions_fallback_404(client):
     )
 
     response = client.chat.completions.create(
-        model="gpt-3.5-turbo", messages=[{"role": "user", "content": "Hello!"}]
+        model="gpt-4o-mini", messages=[{"role": "user", "content": "Hello!"}]
     )
 
     assert response.choices[0].message.content == "404 Fallback!"
@@ -254,7 +254,7 @@ def test_chat_completions_no_multiroute_key(client, monkeypatch):
             json={
                 "id": "chatcmpl-123",
                 "object": "chat.completion",
-                "model": "gpt-3.5-turbo",
+                "model": "gpt-4o-mini",
                 "choices": [
                     {"message": {"role": "assistant", "content": "Direct OpenAI!"}}
                 ],
@@ -264,7 +264,7 @@ def test_chat_completions_no_multiroute_key(client, monkeypatch):
     )
 
     response = client.chat.completions.create(
-        model="gpt-3.5-turbo", messages=[{"role": "user", "content": "Hello!"}]
+        model="gpt-4o-mini", messages=[{"role": "user", "content": "Hello!"}]
     )
 
     assert response.choices[0].message.content == "Direct OpenAI!"

@@ -63,7 +63,7 @@ def test_messages_success(client):
     )
 
     response = client.messages.create(
-        model="claude-3-opus-20240229",
+        model="claude-3-5-sonnet-20241022",
         messages=[{"role": "user", "content": "Hello!"}],
         max_tokens=100,
     )
@@ -83,7 +83,7 @@ def test_messages_success(client):
     assert request.headers["Authorization"] == "Bearer fake"
 
     req_json = import_json(request.content)
-    assert req_json["model"] == "anthropic/claude-3-opus-20240229"
+    assert req_json["model"] == "anthropic/claude-3-5-sonnet-20241022"
     assert req_json["messages"] == [{"role": "user", "content": "Hello!"}]
     assert req_json["max_tokens"] == 100
 
@@ -109,7 +109,7 @@ def test_messages_fallback_500(client):
                 "id": "msg_123",
                 "type": "message",
                 "role": "assistant",
-                "model": "claude-3-opus-20240229",
+                "model": "claude-3-5-sonnet-20241022",
                 "stop_reason": "end_turn",
                 "stop_sequence": None,
                 "content": [{"type": "text", "text": "Fallback response!"}],
@@ -119,7 +119,7 @@ def test_messages_fallback_500(client):
     )
 
     response = client.messages.create(
-        model="claude-3-opus-20240229",
+        model="claude-3-5-sonnet-20241022",
         messages=[{"role": "user", "content": "Hello!"}],
         max_tokens=100,
     )
@@ -142,7 +142,7 @@ def test_messages_fallback_connection_error(client):
                 "id": "msg_123",
                 "type": "message",
                 "role": "assistant",
-                "model": "claude-3-opus-20240229",
+                "model": "claude-3-5-sonnet-20241022",
                 "stop_reason": "end_turn",
                 "stop_sequence": None,
                 "content": [
@@ -157,7 +157,7 @@ def test_messages_fallback_connection_error(client):
     )
 
     response = client.messages.create(
-        model="claude-3-opus-20240229",
+        model="claude-3-5-sonnet-20241022",
         messages=[{"role": "user", "content": "Hello!"}],
         max_tokens=100,
     )
@@ -182,7 +182,7 @@ async def test_async_messages_fallback_500(async_client):
                 "id": "msg_123",
                 "type": "message",
                 "role": "assistant",
-                "model": "claude-3-opus-20240229",
+                "model": "claude-3-5-sonnet-20241022",
                 "stop_reason": "end_turn",
                 "stop_sequence": None,
                 "content": [{"type": "text", "text": "Async Fallback response!"}],
@@ -192,7 +192,7 @@ async def test_async_messages_fallback_500(async_client):
     )
 
     response = await async_client.messages.create(
-        model="claude-3-opus-20240229",
+        model="claude-3-5-sonnet-20241022",
         messages=[{"role": "user", "content": "Hello!"}],
         max_tokens=100,
     )
@@ -243,7 +243,7 @@ def test_tools_request_translation(client):
     )
 
     response = client.messages.create(
-        model="claude-3-opus-20240229",
+        model="claude-3-5-sonnet-20241022",
         messages=[{"role": "user", "content": "What's the weather?"}],
         max_tokens=100,
         tools=[
@@ -310,7 +310,7 @@ def test_tool_choice_translation(client):
 
     # Test tool_choice "any" -> "required"
     client.messages.create(
-        model="claude-3-opus-20240229",
+        model="claude-3-5-sonnet-20241022",
         messages=[{"role": "user", "content": "Hi"}],
         max_tokens=10,
         tools=[
@@ -328,7 +328,7 @@ def test_tool_choice_translation(client):
 
     # Test tool_choice "auto" -> "auto"
     client.messages.create(
-        model="claude-3-opus-20240229",
+        model="claude-3-5-sonnet-20241022",
         messages=[{"role": "user", "content": "Hi"}],
         max_tokens=10,
         tools=[
@@ -346,7 +346,7 @@ def test_tool_choice_translation(client):
 
     # Test tool_choice "tool" -> specific function
     client.messages.create(
-        model="claude-3-opus-20240229",
+        model="claude-3-5-sonnet-20241022",
         messages=[{"role": "user", "content": "Hi"}],
         max_tokens=10,
         tools=[
@@ -393,7 +393,7 @@ def test_tool_result_message_translation(client):
     )
 
     response = client.messages.create(
-        model="claude-3-opus-20240229",
+        model="claude-3-5-sonnet-20241022",
         messages=[
             {"role": "user", "content": "What's the weather?"},
             {
@@ -454,7 +454,7 @@ def test_messages_no_multiroute_key(client, monkeypatch):
                 "id": "msg_123",
                 "type": "message",
                 "role": "assistant",
-                "model": "claude-3-opus-20240229",
+                "model": "claude-3-5-sonnet-20241022",
                 "stop_reason": "end_turn",
                 "stop_sequence": None,
                 "content": [{"type": "text", "text": "Direct Anthropic!"}],
@@ -464,7 +464,7 @@ def test_messages_no_multiroute_key(client, monkeypatch):
     )
 
     response = client.messages.create(
-        model="claude-3-opus-20240229",
+        model="claude-3-5-sonnet-20241022",
         messages=[{"role": "user", "content": "Hello!"}],
         max_tokens=100,
     )
@@ -494,7 +494,7 @@ def test_mixed_text_and_tool_use_translation(client):
     )
 
     client.messages.create(
-        model="claude-3-opus-20240229",
+        model="claude-3-5-sonnet-20241022",
         messages=[
             {
                 "role": "assistant",
@@ -1031,3 +1031,109 @@ def test_async_no_multiroute_key_warns(monkeypatch):
     monkeypatch.delenv("MULTIROUTE_API_KEY", raising=False)
     with pytest.warns(UserWarning, match="MULTIROUTE_API_KEY is not set"):
         AsyncAnthropic(api_key="test-key")
+
+
+# ---------------------------------------------------------------------------
+# 404 fallback
+# ---------------------------------------------------------------------------
+
+
+@respx.mock
+def test_messages_fallback_404(client):
+    """A 404 from the proxy should trigger fallback to native Anthropic."""
+    multiroute_route = respx.post(f"{MULTIROUTE_BASE_URL}/chat/completions").mock(
+        return_value=httpx.Response(404, json={"detail": "Not Found"})
+    )
+
+    anthropic_route = respx.post("https://api.anthropic.com/v1/messages").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "id": "msg_404fb",
+                "type": "message",
+                "role": "assistant",
+                "model": "claude-3-5-sonnet-20241022",
+                "stop_reason": "end_turn",
+                "stop_sequence": None,
+                "content": [{"type": "text", "text": "404 Fallback!"}],
+                "usage": {"input_tokens": 5, "output_tokens": 5},
+            },
+        )
+    )
+
+    response = client.messages.create(
+        model="claude-3-5-sonnet-20241022",
+        messages=[{"role": "user", "content": "Hello!"}],
+        max_tokens=50,
+    )
+
+    assert response.content[0].text == "404 Fallback!"
+    assert multiroute_route.called
+    assert anthropic_route.called
+
+
+# ---------------------------------------------------------------------------
+# Timeout fallback
+# ---------------------------------------------------------------------------
+
+
+@respx.mock
+def test_messages_fallback_timeout(client):
+    """An httpx.TimeoutException from the proxy should trigger fallback to native Anthropic."""
+    multiroute_route = respx.post(f"{MULTIROUTE_BASE_URL}/chat/completions").mock(
+        side_effect=httpx.TimeoutException("timed out")
+    )
+
+    anthropic_route = respx.post("https://api.anthropic.com/v1/messages").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "id": "msg_timeout",
+                "type": "message",
+                "role": "assistant",
+                "model": "claude-3-5-sonnet-20241022",
+                "stop_reason": "end_turn",
+                "stop_sequence": None,
+                "content": [{"type": "text", "text": "Timeout Fallback!"}],
+                "usage": {"input_tokens": 5, "output_tokens": 5},
+            },
+        )
+    )
+
+    response = client.messages.create(
+        model="claude-3-5-sonnet-20241022",
+        messages=[{"role": "user", "content": "Hello!"}],
+        max_tokens=50,
+    )
+
+    assert response.content[0].text == "Timeout Fallback!"
+    assert multiroute_route.called
+    assert anthropic_route.called
+
+
+# ---------------------------------------------------------------------------
+# Async non-multiroute errors are re-raised
+# ---------------------------------------------------------------------------
+
+
+@respx.mock
+async def test_async_messages_non_multiroute_error_reraised(async_client):
+    """A 401 from the proxy in async mode should be re-raised, not swallowed."""
+    respx.post(f"{MULTIROUTE_BASE_URL}/chat/completions").mock(
+        return_value=httpx.Response(
+            401,
+            json={
+                "error": {
+                    "message": "Invalid API key",
+                    "type": "authentication_error",
+                }
+            },
+        )
+    )
+
+    with pytest.raises(openai.AuthenticationError):
+        await async_client.messages.create(
+            model="claude-3-5-sonnet-20241022",
+            messages=[{"role": "user", "content": "Hello!"}],
+            max_tokens=50,
+        )

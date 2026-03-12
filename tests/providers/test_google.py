@@ -744,3 +744,89 @@ def test_no_multiroute_key_warns(monkeypatch):
     monkeypatch.delenv("MULTIROUTE_API_KEY", raising=False)
     with pytest.warns(UserWarning, match="MULTIROUTE_API_KEY is not set"):
         Client(api_key="test-google-key")
+
+
+# ---------------------------------------------------------------------------
+# 404 fallback
+# ---------------------------------------------------------------------------
+
+
+@respx.mock
+def test_generate_content_fallback_404(client):
+    """A 404 from the proxy should trigger fallback to native Google."""
+    multiroute_route = respx.post(
+        "https://api.multiroute.ai/openai/v1/chat/completions"
+    ).mock(return_value=httpx.Response(404, json={"detail": "Not Found"}))
+
+    google_route = respx.post(
+        url__regex=r"https://generativelanguage.googleapis.com/.*"
+    ).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "candidates": [
+                    {
+                        "content": {
+                            "role": "model",
+                            "parts": [{"text": "404 Google Fallback!"}],
+                        },
+                        "finishReason": "STOP",
+                    }
+                ],
+                "usageMetadata": {
+                    "promptTokenCount": 3,
+                    "candidatesTokenCount": 3,
+                    "totalTokenCount": 6,
+                },
+            },
+        )
+    )
+
+    response = client.models.generate_content(model="gemini-2.0-flash", contents="Hi")
+
+    assert response.text == "404 Google Fallback!"
+    assert multiroute_route.called
+    assert google_route.called
+
+
+# ---------------------------------------------------------------------------
+# Timeout fallback
+# ---------------------------------------------------------------------------
+
+
+@respx.mock
+def test_generate_content_fallback_timeout(client):
+    """An httpx.TimeoutException from the proxy should trigger fallback to native Google."""
+    multiroute_route = respx.post(
+        "https://api.multiroute.ai/openai/v1/chat/completions"
+    ).mock(side_effect=httpx.TimeoutException("timed out"))
+
+    google_route = respx.post(
+        url__regex=r"https://generativelanguage.googleapis.com/.*"
+    ).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "candidates": [
+                    {
+                        "content": {
+                            "role": "model",
+                            "parts": [{"text": "Timeout Google Fallback!"}],
+                        },
+                        "finishReason": "STOP",
+                    }
+                ],
+                "usageMetadata": {
+                    "promptTokenCount": 3,
+                    "candidatesTokenCount": 3,
+                    "totalTokenCount": 6,
+                },
+            },
+        )
+    )
+
+    response = client.models.generate_content(model="gemini-2.0-flash", contents="Hi")
+
+    assert response.text == "Timeout Google Fallback!"
+    assert multiroute_route.called
+    assert google_route.called

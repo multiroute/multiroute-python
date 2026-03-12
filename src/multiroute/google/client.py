@@ -357,8 +357,13 @@ def _google_to_openai_request(
                                     )
                         if openai_tools:
                             openai_req["tools"] = openai_tools
-                    except Exception:
-                        pass  # Silently drop tools if conversion fails, let backend handle if possible
+                    except Exception as _tool_err:
+                        warnings.warn(
+                            f"multiroute: failed to convert Google tools to OpenAI format "
+                            f"({_tool_err!r}); tools will be omitted from the proxy request.",
+                            UserWarning,
+                            stacklevel=2,
+                        )
 
     return openai_req
 
