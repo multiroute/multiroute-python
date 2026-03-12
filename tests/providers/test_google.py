@@ -21,7 +21,7 @@ def setup_env(monkeypatch):
 @respx.mock
 def test_generate_content_success(client):
     # Mock Multiroute (OpenAI format)
-    multiroute_route = respx.post("https://api.multiroute.ai/v1/chat/completions").mock(
+    multiroute_route = respx.post("https://api.multiroute.ai/openai/v1/chat/completions").mock(
         return_value=httpx.Response(
             200,
             json={
@@ -64,7 +64,7 @@ def test_generate_content_success(client):
 @respx.mock
 def test_generate_content_fallback(client):
     # Mock Multiroute failure
-    multiroute_route = respx.post("https://api.multiroute.ai/v1/chat/completions").mock(
+    multiroute_route = respx.post("https://api.multiroute.ai/openai/v1/chat/completions").mock(
         return_value=httpx.Response(500, json={"error": "failed"})
     )
 
@@ -104,7 +104,7 @@ def test_generate_content_fallback(client):
 @respx.mock
 async def test_async_generate_content_success(client):
     # Async mock for Multiroute
-    multiroute_route = respx.post("https://api.multiroute.ai/v1/chat/completions").mock(
+    multiroute_route = respx.post("https://api.multiroute.ai/openai/v1/chat/completions").mock(
         return_value=httpx.Response(
             200,
             json={
@@ -126,7 +126,7 @@ async def test_async_generate_content_success(client):
 def test_no_multiroute_key(client, monkeypatch):
     monkeypatch.delenv("MULTIROUTE_API_KEY", raising=False)
 
-    multiroute_route = respx.post("https://api.multiroute.ai/v1/chat/completions").mock(
+    multiroute_route = respx.post("https://api.multiroute.ai/openai/v1/chat/completions").mock(
         return_value=httpx.Response(200, json={})
     )
 
@@ -149,7 +149,7 @@ def test_no_multiroute_key(client, monkeypatch):
 @respx.mock
 def test_tools_request_translation(client):
     """Tools in GenerateContentConfig should be translated into OpenAI tools format."""
-    multiroute_route = respx.post("https://api.multiroute.ai/v1/chat/completions").mock(
+    multiroute_route = respx.post("https://api.multiroute.ai/openai/v1/chat/completions").mock(
         return_value=httpx.Response(
             200,
             json={
@@ -226,7 +226,7 @@ def test_tools_request_translation(client):
 @respx.mock
 def test_function_response_contents_translation(client):
     """Contents with function_response parts should become OpenAI tool-role messages."""
-    multiroute_route = respx.post("https://api.multiroute.ai/v1/chat/completions").mock(
+    multiroute_route = respx.post("https://api.multiroute.ai/openai/v1/chat/completions").mock(
         return_value=httpx.Response(
             200,
             json={
@@ -303,7 +303,7 @@ def test_function_response_contents_translation(client):
 @respx.mock
 def test_mixed_text_and_function_call_translation(client):
     """Contents with both text and function_call should preserve both when translating to OpenAI."""
-    multiroute_route = respx.post("https://api.multiroute.ai/v1/chat/completions").mock(
+    multiroute_route = respx.post("https://api.multiroute.ai/openai/v1/chat/completions").mock(
         return_value=httpx.Response(
             200,
             json={

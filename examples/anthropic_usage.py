@@ -10,7 +10,7 @@ def sync_example():
     print("--- Running Sync Example ---")
     client = Anthropic()
 
-    # This request will first try https://api.multiroute.ai/v1/chat/completions
+    # This request will first try https://api.multiroute.ai/openai/v1/chat/completions
     # If that fails (5xx or connection error), it falls back to api.anthropic.com
     # try:
     response = client.messages.create(

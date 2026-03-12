@@ -75,7 +75,7 @@ def test_messages_success(client):
     assert request.headers["Authorization"] == "Bearer fake"
 
     req_json = import_json(request.content)
-    assert req_json["model"] == "claude-3-opus-20240229"
+    assert req_json["model"] == "anthropic/claude-3-opus-20240229"
     assert req_json["messages"] == [{"role": "user", "content": "Hello!"}]
     assert req_json["max_tokens"] == 100
 

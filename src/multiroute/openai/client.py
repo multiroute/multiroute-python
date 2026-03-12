@@ -10,7 +10,7 @@ from openai.resources.chat.completions import (
 )
 from openai.resources.responses import AsyncResponses, Responses
 
-MULTIROUTE_BASE_URL = "https://api.multiroute.ai/v1"
+MULTIROUTE_BASE_URL = "https://api.multiroute.ai/openai/v1"
 
 
 def _is_multiroute_error(e: Exception) -> bool:
@@ -38,8 +38,8 @@ class MultirouteChatCompletions(ChatCompletions):
         )
 
         try:
-            # Bypass the overridden create and call the original ChatCompletions directly
-            return ChatCompletions(temp_client).create(**kwargs)
+            multiroute_kwargs = {**kwargs, "model": "openai/" + kwargs["model"]}
+            return ChatCompletions(temp_client).create(**multiroute_kwargs)
         except Exception as e:
             if _is_multiroute_error(e):
                 # Fallback to original
@@ -57,7 +57,8 @@ class AsyncMultirouteChatCompletions(AsyncChatCompletions):
         )
 
         try:
-            return await AsyncChatCompletions(temp_client).create(**kwargs)
+            multiroute_kwargs = {**kwargs, "model": "openai/" + kwargs["model"]}
+            return await AsyncChatCompletions(temp_client).create(**multiroute_kwargs)
         except Exception as e:
             if _is_multiroute_error(e):
                 return await super().create(**kwargs)
@@ -74,7 +75,8 @@ class MultirouteResponses(Responses):
         )
 
         try:
-            return Responses(temp_client).create(**kwargs)
+            multiroute_kwargs = {**kwargs, "model": "openai/" + kwargs["model"]}
+            return Responses(temp_client).create(**multiroute_kwargs)
         except Exception as e:
             if _is_multiroute_error(e):
                 return super().create(**kwargs)
@@ -91,7 +93,8 @@ class AsyncMultirouteResponses(AsyncResponses):
         )
 
         try:
-            return await AsyncResponses(temp_client).create(**kwargs)
+            multiroute_kwargs = {**kwargs, "model": "openai/" + kwargs["model"]}
+            return await AsyncResponses(temp_client).create(**multiroute_kwargs)
         except Exception as e:
             if _is_multiroute_error(e):
                 return await super().create(**kwargs)

@@ -9,7 +9,7 @@ def sync_example():
     print("--- Running Sync Example ---")
     client = OpenAI()
     
-    # This request will first try https://api.multiroute.ai/v1/chat/completions
+    # This request will first try https://api.multiroute.ai/openai/v1/chat/completions
     # If that fails (5xx or connection error), it falls back to api.openai.com
     try:
         response = client.chat.completions.create(

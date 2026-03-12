@@ -8,7 +8,7 @@ import openai
 from anthropic.resources.messages import AsyncMessages, Messages
 from anthropic.types import Message
 
-MULTIROUTE_BASE_URL = "https://api.multiroute.ai/v1"
+MULTIROUTE_BASE_URL = "https://api.multiroute.ai/openai/v1"
 
 
 def _is_multiroute_error(e: Exception) -> bool:
@@ -64,7 +64,7 @@ def _anthropic_to_openai_request(kwargs: Dict[str, Any]) -> Dict[str, Any]:
 
     # Model
     if "model" in kwargs:
-        openai_req["model"] = model
+        openai_req["model"] = "anthropic/" + model
 
     # System prompt -> role: system
     messages = []
