@@ -1,5 +1,6 @@
 import json
 import os
+import logging
 import warnings
 from typing import Any, AsyncIterator, Dict, Iterator, Optional
 
@@ -615,11 +616,9 @@ class Client(genai.Client):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if not os.environ.get("MULTIROUTE_API_KEY"):
-            warnings.warn(
+            logging.error(
                 "MULTIROUTE_API_KEY is not set. Requests will go directly to Google "
-                "without Multiroute high-availability routing.",
-                UserWarning,
-                stacklevel=2,
+                "without Multiroute high-availability routing."
             )
         # Save original methods and override
         self._multiroute_models = MultirouteModels(

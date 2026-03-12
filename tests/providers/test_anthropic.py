@@ -1021,16 +1021,22 @@ async def test_async_messages_stream_fallback_500(async_client):
     assert len(events) > 0
 
 
-def test_no_multiroute_key_warns(monkeypatch):
+def test_no_multiroute_key_warns(monkeypatch, caplog):
     monkeypatch.delenv("MULTIROUTE_API_KEY", raising=False)
-    with pytest.warns(UserWarning, match="MULTIROUTE_API_KEY is not set"):
+    import logging
+
+    with caplog.at_level(logging.ERROR):
         Anthropic(api_key="test-key")
+    assert "MULTIROUTE_API_KEY is not set" in caplog.text
 
 
-def test_async_no_multiroute_key_warns(monkeypatch):
+def test_async_no_multiroute_key_warns(monkeypatch, caplog):
     monkeypatch.delenv("MULTIROUTE_API_KEY", raising=False)
-    with pytest.warns(UserWarning, match="MULTIROUTE_API_KEY is not set"):
+    import logging
+
+    with caplog.at_level(logging.ERROR):
         AsyncAnthropic(api_key="test-key")
+    assert "MULTIROUTE_API_KEY is not set" in caplog.text
 
 
 # ---------------------------------------------------------------------------

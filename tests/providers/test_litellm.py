@@ -87,16 +87,19 @@ async def test_litellm_acompletion_proxy_fallback(mock_env):
         assert "custom_llm_provider" not in fallback_kwargs
 
 
-def test_litellm_completion_no_key(monkeypatch):
+def test_litellm_completion_no_key(monkeypatch, caplog):
     monkeypatch.delenv("MULTIROUTE_API_KEY", raising=False)
+    import logging
+
     with patch("multiroute.litellm.client.litellm.completion") as mock_completion:
         mock_completion.return_value = "direct_success"
 
-        with pytest.warns(UserWarning, match="MULTIROUTE_API_KEY is not set"):
+        with caplog.at_level(logging.ERROR):
             response = completion(
                 model="claude-3-opus", messages=[{"role": "user", "content": "hello"}]
             )
 
+        assert "MULTIROUTE_API_KEY is not set" in caplog.text
         assert response == "direct_success"
         mock_completion.assert_called_once()
         kwargs = mock_completion.call_args.kwargs
@@ -110,19 +113,22 @@ def test_litellm_completion_no_key(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_litellm_acompletion_no_key(monkeypatch):
+async def test_litellm_acompletion_no_key(monkeypatch, caplog):
     """acompletion without MULTIROUTE_API_KEY calls litellm directly."""
     monkeypatch.delenv("MULTIROUTE_API_KEY", raising=False)
+    import logging
+
     with patch(
         "multiroute.litellm.client.litellm.acompletion", new_callable=AsyncMock
     ) as mock_acompletion:
         mock_acompletion.return_value = "direct_async_success"
 
-        with pytest.warns(UserWarning, match="MULTIROUTE_API_KEY is not set"):
+        with caplog.at_level(logging.ERROR):
             response = await acompletion(
                 model="gpt-4o", messages=[{"role": "user", "content": "hello"}]
             )
 
+        assert "MULTIROUTE_API_KEY is not set" in caplog.text
         assert response == "direct_async_success"
         mock_acompletion.assert_called_once()
         kwargs = mock_acompletion.call_args.kwargs

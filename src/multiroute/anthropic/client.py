@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import os
-import warnings
+import logging
 from typing import Any, AsyncIterator, Dict, Iterator, Union
 
 import anthropic
@@ -614,11 +614,9 @@ class Anthropic(anthropic.Anthropic):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if not os.environ.get("MULTIROUTE_API_KEY"):
-            warnings.warn(
+            logging.error(
                 "MULTIROUTE_API_KEY is not set. Requests will go directly to Anthropic "
-                "without Multiroute high-availability routing.",
-                UserWarning,
-                stacklevel=2,
+                "without Multiroute high-availability routing."
             )
         self.messages = MultirouteMessages(self)
 
@@ -627,10 +625,8 @@ class AsyncAnthropic(anthropic.AsyncAnthropic):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if not os.environ.get("MULTIROUTE_API_KEY"):
-            warnings.warn(
+            logging.error(
                 "MULTIROUTE_API_KEY is not set. Requests will go directly to Anthropic "
-                "without Multiroute high-availability routing.",
-                UserWarning,
-                stacklevel=2,
+                "without Multiroute high-availability routing."
             )
         self.messages = AsyncMultirouteMessages(self)

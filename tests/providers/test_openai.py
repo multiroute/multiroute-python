@@ -570,13 +570,19 @@ async def test_async_responses_fallback_500(async_client):
     assert response.id == "resp_abc123"
 
 
-def test_no_multiroute_key_warns(monkeypatch):
+def test_no_multiroute_key_warns(monkeypatch, caplog):
     monkeypatch.delenv("MULTIROUTE_API_KEY", raising=False)
-    with pytest.warns(UserWarning, match="MULTIROUTE_API_KEY is not set"):
+    import logging
+
+    with caplog.at_level(logging.ERROR):
         OpenAI(api_key="test-key")
+    assert "MULTIROUTE_API_KEY is not set" in caplog.text
 
 
-def test_async_no_multiroute_key_warns(monkeypatch):
+def test_async_no_multiroute_key_warns(monkeypatch, caplog):
     monkeypatch.delenv("MULTIROUTE_API_KEY", raising=False)
-    with pytest.warns(UserWarning, match="MULTIROUTE_API_KEY is not set"):
+    import logging
+
+    with caplog.at_level(logging.ERROR):
         AsyncOpenAI(api_key="test-key")
+    assert "MULTIROUTE_API_KEY is not set" in caplog.text

@@ -740,10 +740,13 @@ async def test_async_generate_content_stream_fallback_500(client):
     assert chunks[0].candidates[0].content.parts[0].text == "Async native stream!"
 
 
-def test_no_multiroute_key_warns(monkeypatch):
+def test_no_multiroute_key_warns(monkeypatch, caplog):
     monkeypatch.delenv("MULTIROUTE_API_KEY", raising=False)
-    with pytest.warns(UserWarning, match="MULTIROUTE_API_KEY is not set"):
+    import logging
+
+    with caplog.at_level(logging.ERROR):
         Client(api_key="test-google-key")
+    assert "MULTIROUTE_API_KEY is not set" in caplog.text
 
 
 # ---------------------------------------------------------------------------

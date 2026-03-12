@@ -1,5 +1,5 @@
 import os
-import warnings
+import logging
 from typing import Any
 
 import openai
@@ -120,11 +120,9 @@ class OpenAI(openai.OpenAI):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if not os.environ.get("MULTIROUTE_API_KEY"):
-            warnings.warn(
+            logging.error(
                 "MULTIROUTE_API_KEY is not set. Requests will go directly to OpenAI "
-                "without Multiroute high-availability routing.",
-                UserWarning,
-                stacklevel=2,
+                "without Multiroute high-availability routing."
             )
         # Override the chat completions and responses resources with our wrappers
         self.chat.completions = MultirouteChatCompletions(self)
@@ -135,11 +133,9 @@ class AsyncOpenAI(openai.AsyncOpenAI):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if not os.environ.get("MULTIROUTE_API_KEY"):
-            warnings.warn(
+            logging.error(
                 "MULTIROUTE_API_KEY is not set. Requests will go directly to OpenAI "
-                "without Multiroute high-availability routing.",
-                UserWarning,
-                stacklevel=2,
+                "without Multiroute high-availability routing."
             )
         self.chat.completions = AsyncMultirouteChatCompletions(self)
         self.responses = AsyncMultirouteResponses(self)

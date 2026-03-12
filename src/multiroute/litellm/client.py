@@ -1,6 +1,6 @@
 import copy
 import os
-import warnings
+import logging
 
 try:
     import litellm
@@ -65,7 +65,7 @@ def completion(**kwargs):
 
     mr_api_key = os.environ.get("MULTIROUTE_API_KEY")
     if not mr_api_key:
-        warnings.warn(_MISSING_KEY_MESSAGE, UserWarning, stacklevel=2)
+        logging.error(_MISSING_KEY_MESSAGE)
         return litellm.completion(**kwargs)
 
     mr_kwargs = copy.copy(kwargs)
@@ -89,7 +89,7 @@ async def acompletion(**kwargs):
 
     mr_api_key = os.environ.get("MULTIROUTE_API_KEY")
     if not mr_api_key:
-        warnings.warn(_MISSING_KEY_MESSAGE, UserWarning, stacklevel=2)
+        logging.error(_MISSING_KEY_MESSAGE)
         return await litellm.acompletion(**kwargs)
 
     mr_kwargs = copy.copy(kwargs)
