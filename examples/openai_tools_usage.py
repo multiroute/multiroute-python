@@ -49,7 +49,7 @@ message = response.choices[0].message
 messages.append(message)  # Add assistant's tool call message to history
 
 if message.tool_calls:
-    print(f"\nModel decided to call a tool:")
+    print("\nModel decided to call a tool:")
     for tool_call in message.tool_calls:
         print(f" - Function Name: {tool_call.function.name}")
         print(f" - Arguments: {tool_call.function.arguments}")

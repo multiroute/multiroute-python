@@ -2,7 +2,6 @@ import pytest
 import respx
 import httpx
 import json
-from anthropic import APIConnectionError, InternalServerError, APITimeoutError
 from multiroute.anthropic import Anthropic, AsyncAnthropic
 from multiroute.anthropic.client import MULTIROUTE_BASE_URL
 

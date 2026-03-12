@@ -318,7 +318,6 @@ class MultirouteMessages(Messages):
             return super().create(**kwargs)
 
         # Save original API URL and client behavior
-        original_base_url = self._client.base_url
 
         try:
             openai_req = _anthropic_to_openai_request(kwargs)
@@ -343,7 +342,6 @@ class AsyncMultirouteMessages(AsyncMessages):
         if not os.environ.get("MULTIROUTE_API_KEY"):
             return await super().create(**kwargs)
 
-        original_base_url = self._client.base_url
 
         try:
             openai_req = _anthropic_to_openai_request(kwargs)

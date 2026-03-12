@@ -1,9 +1,8 @@
-import os
 from multiroute.openai import OpenAI
-import httpx
 
 # Set your OpenAI API key
 # os.environ["OPENAI_API_KEY"] = "your-api-key"
+
 
 def responses_example():
     """
@@ -12,17 +11,17 @@ def responses_example():
     """
     print("\n--- Running Responses API Example ---")
     client = OpenAI()
-    
+
     try:
         # This will attempt multiroute.ai first
         response = client.responses.create(
-            model="gpt-4o", 
-            input="Explain how quantum computing works in one sentence."
+            model="gpt-4o", input="Explain how quantum computing works in one sentence."
         )
         print("Response received from API.")
         print(f"Content: {response.output[0].content[0].text}")
     except Exception as e:
         print(f"Error: {e}")
+
 
 if __name__ == "__main__":
     responses_example()

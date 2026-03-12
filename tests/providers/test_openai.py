@@ -2,7 +2,6 @@ import json
 import pytest
 import respx
 import httpx
-from openai import APIConnectionError, InternalServerError, APITimeoutError
 from multiroute.openai import OpenAI, AsyncOpenAI
 
 
@@ -23,7 +22,9 @@ def setup_env(monkeypatch):
 
 @respx.mock
 def test_chat_completions_success(client):
-    multiroute_route = respx.post("https://api.multiroute.ai/openai/v1/chat/completions").mock(
+    multiroute_route = respx.post(
+        "https://api.multiroute.ai/openai/v1/chat/completions"
+    ).mock(
         return_value=httpx.Response(
             200,
             json={
@@ -68,7 +69,9 @@ def test_chat_completions_success(client):
 
 @respx.mock
 def test_chat_completions_fallback_500(client):
-    multiroute_route = respx.post("https://api.multiroute.ai/openai/v1/chat/completions").mock(
+    multiroute_route = respx.post(
+        "https://api.multiroute.ai/openai/v1/chat/completions"
+    ).mock(
         return_value=httpx.Response(
             500, json={"error": {"message": "Internal Server Error"}}
         )
@@ -114,9 +117,9 @@ def test_chat_completions_fallback_500(client):
 
 @respx.mock
 def test_chat_completions_fallback_connection_error(client):
-    multiroute_route = respx.post("https://api.multiroute.ai/openai/v1/chat/completions").mock(
-        side_effect=httpx.ConnectError("Connection refused")
-    )
+    multiroute_route = respx.post(
+        "https://api.multiroute.ai/openai/v1/chat/completions"
+    ).mock(side_effect=httpx.ConnectError("Connection refused"))
 
     openai_route = respx.post("https://api.openai.com/v1/chat/completions").mock(
         return_value=httpx.Response(
@@ -161,7 +164,9 @@ def test_chat_completions_fallback_connection_error(client):
 
 @respx.mock
 async def test_async_chat_completions_fallback_500(async_client):
-    multiroute_route = respx.post("https://api.multiroute.ai/openai/v1/chat/completions").mock(
+    multiroute_route = respx.post(
+        "https://api.multiroute.ai/openai/v1/chat/completions"
+    ).mock(
         return_value=httpx.Response(
             500, json={"error": {"message": "Internal Server Error"}}
         )
@@ -207,9 +212,9 @@ async def test_async_chat_completions_fallback_500(async_client):
 
 @respx.mock
 def test_chat_completions_fallback_404(client):
-    multiroute_route = respx.post("https://api.multiroute.ai/openai/v1/chat/completions").mock(
-        return_value=httpx.Response(404, json={"detail": "Not Found"})
-    )
+    multiroute_route = respx.post(
+        "https://api.multiroute.ai/openai/v1/chat/completions"
+    ).mock(return_value=httpx.Response(404, json={"detail": "Not Found"}))
 
     openai_route = respx.post("https://api.openai.com/v1/chat/completions").mock(
         return_value=httpx.Response(
@@ -238,9 +243,9 @@ def test_chat_completions_fallback_404(client):
 def test_chat_completions_no_multiroute_key(client, monkeypatch):
     monkeypatch.delenv("MULTIROUTE_API_KEY", raising=False)
 
-    multiroute_route = respx.post("https://api.multiroute.ai/openai/v1/chat/completions").mock(
-        return_value=httpx.Response(200, json={})
-    )
+    multiroute_route = respx.post(
+        "https://api.multiroute.ai/openai/v1/chat/completions"
+    ).mock(return_value=httpx.Response(200, json={}))
 
     openai_route = respx.post("https://api.openai.com/v1/chat/completions").mock(
         return_value=httpx.Response(
@@ -269,7 +274,9 @@ def test_chat_completions_no_multiroute_key(client, monkeypatch):
 @respx.mock
 def test_tools_passed_through_to_proxy(client):
     """OpenAI tools should be forwarded as-is to the Multiroute proxy."""
-    multiroute_route = respx.post("https://api.multiroute.ai/openai/v1/chat/completions").mock(
+    multiroute_route = respx.post(
+        "https://api.multiroute.ai/openai/v1/chat/completions"
+    ).mock(
         return_value=httpx.Response(
             200,
             json={
