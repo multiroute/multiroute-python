@@ -100,10 +100,14 @@ def _schema_to_dict(schema: Any) -> Dict[str, Any]:
 
 def _get_client_base_url(client: Any) -> Optional[str]:
     """Extract the base URL string from a google.genai.Client instance."""
-    try:
-        return client._api_client._http_options.base_url
-    except AttributeError:
+    # Use a defensive getattr-chain so changes to google.genai internals
+    # don't raise here, and normalize the result to a string if present.
+    api_client = getattr(client, "_api_client", None)
+    http_options = getattr(api_client, "_http_options", None)
+    base_url = getattr(http_options, "base_url", None)
+    if base_url is None:
         return None
+    return str(base_url)
 
 
 def _google_to_openai_request(
