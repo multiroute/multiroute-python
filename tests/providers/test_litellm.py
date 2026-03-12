@@ -22,7 +22,7 @@ def test_litellm_completion_proxy_success(mock_env):
         assert response == "proxy_success"
         mock_completion.assert_called_once()
         kwargs = mock_completion.call_args.kwargs
-        assert kwargs["model"] == "anthropic/claude-3-opus"
+        assert kwargs["model"] == "claude-3-opus"
         assert kwargs["api_base"] == "https://api.multiroute.ai/v1"
         assert kwargs["api_key"] == "test-multiroute-key"
         assert kwargs["custom_llm_provider"] == "openai"
@@ -173,7 +173,7 @@ def test_litellm_completion_non_multiroute_error_reraised(mock_env):
 
 
 def test_litellm_completion_resolve_model_prefixes_gpt(mock_env):
-    """resolve_model should prefix known model names (gpt-4o -> openai/gpt-4o)."""
+    """Model names are passed through to the proxy unchanged (no prefix added for litellm)."""
     with patch("multiroute.litellm.client.litellm.completion") as mock_completion:
         mock_completion.return_value = "ok"
 
@@ -181,7 +181,7 @@ def test_litellm_completion_resolve_model_prefixes_gpt(mock_env):
 
         mock_completion.assert_called_once()
         kwargs = mock_completion.call_args.kwargs
-        assert kwargs["model"] == "openai/gpt-4o"
+        assert kwargs["model"] == "gpt-4o"
         assert kwargs["api_base"] == "https://api.multiroute.ai/v1"
 
 

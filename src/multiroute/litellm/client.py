@@ -6,8 +6,6 @@ try:
 except ImportError:
     litellm = None
 
-from multiroute.models import resolve_model
-
 MULTIROUTE_BASE_URL = "https://api.multiroute.ai/v1"
 
 
@@ -64,7 +62,6 @@ def completion(**kwargs):
         return litellm.completion(**kwargs)
 
     mr_kwargs = copy.copy(kwargs)
-    mr_kwargs["model"] = resolve_model(kwargs["model"])
     mr_kwargs["api_base"] = MULTIROUTE_BASE_URL
     mr_kwargs["api_key"] = mr_api_key
     mr_kwargs["custom_llm_provider"] = "openai"
@@ -88,7 +85,6 @@ async def acompletion(**kwargs):
         return await litellm.acompletion(**kwargs)
 
     mr_kwargs = copy.copy(kwargs)
-    mr_kwargs["model"] = resolve_model(kwargs["model"])
     mr_kwargs["api_base"] = MULTIROUTE_BASE_URL
     mr_kwargs["api_key"] = mr_api_key
     mr_kwargs["custom_llm_provider"] = "openai"
