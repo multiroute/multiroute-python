@@ -11,7 +11,7 @@ from openai.resources.chat.completions import (
 )
 from openai.resources.responses import AsyncResponses, Responses
 
-from multiroute.models import resolve_model
+from multiroute.providers import resolve_model
 
 MULTIROUTE_BASE_URL = "https://api.multiroute.ai/openai/v1"
 

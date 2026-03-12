@@ -10,7 +10,7 @@ from google.genai import types
 from google.genai._transformers import t_tools
 from google.genai.types import FinishReason, GenerateContentResponseUsageMetadata
 
-from multiroute.models import resolve_model
+from multiroute.providers import resolve_model
 
 MULTIROUTE_BASE_URL = "https://api.multiroute.ai/openai/v1"
 

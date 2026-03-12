@@ -5,13 +5,13 @@
 # to route the request.
 #
 # Format:
-#   url_providers:
+#   providers:
 #     <url-substring>: <provider>
 #
 # Matching checks whether the base_url contains the substring (case-insensitive).
 # Entries are tested longest-first so more specific URLs win.
 
-url_providers:
+providers:
   api.openai.com: openai
   api.groq.com: groq
   api.anthropic.com: anthropic

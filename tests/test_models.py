@@ -1,7 +1,5 @@
-import pytest
 
-from multiroute.models import resolve_model, _load_url_registry
-
+from multiroute.providers import _load_url_registry, resolve_model
 
 # --- already-prefixed model passthrough ---
 

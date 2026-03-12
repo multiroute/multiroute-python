@@ -9,19 +9,22 @@ import anthropic
 import httpx
 import openai
 from anthropic.resources.messages import AsyncMessages, Messages
-from anthropic.types import Message, MessageDeltaUsage, TextBlock, Usage
 from anthropic.types import (
+    Message,
+    MessageDeltaUsage,
     RawContentBlockDeltaEvent,
     RawContentBlockStartEvent,
     RawContentBlockStopEvent,
     RawMessageDeltaEvent,
     RawMessageStartEvent,
     RawMessageStopEvent,
+    TextBlock,
     TextDelta,
+    Usage,
 )
 from anthropic.types.raw_message_delta_event import Delta
 
-from multiroute.models import resolve_model
+from multiroute.providers import resolve_model
 
 MULTIROUTE_BASE_URL = "https://api.multiroute.ai/openai/v1"
 

@@ -16,7 +16,7 @@ from typing import Dict, List, Optional, Tuple
 
 import yaml
 
-_REGISTRY_PATH = Path(__file__).parent / "models.yaml"
+_REGISTRY_PATH = Path(__file__).parent / "providers.yaml"
 
 
 @lru_cache(maxsize=1)
@@ -29,10 +29,10 @@ def _load_url_registry() -> List[Tuple[str, str]]:
     with open(_REGISTRY_PATH, encoding="utf-8") as fh:
         data: Dict = yaml.safe_load(fh)
 
-    url_providers: Dict[str, str] = (data or {}).get("url_providers", {})
+    providers: Dict[str, str] = (data or {}).get("providers", {})
 
     pairs: List[Tuple[str, str]] = [
-        (pattern.lower(), provider) for pattern, provider in url_providers.items()
+        (pattern.lower(), provider) for pattern, provider in providers.items()
     ]
 
     # Longer patterns should be tested first (more specific wins)
