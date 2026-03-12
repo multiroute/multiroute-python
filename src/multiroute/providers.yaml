@@ -1,15 +1,11 @@
-# URL registry: maps base URL substrings to provider names.
+# Domain-to-provider registry.
 # When a request is made without a provider prefix (e.g. "gpt-4o" instead of
-# "openai/gpt-4o"), the resolver inspects the client's base_url and looks up
-# this file to prepend the correct provider so the Multiroute proxy knows how
-# to route the request.
+# "openai/gpt-4o"), the resolver extracts the hostname from the client's
+# base_url and looks it up in this map to prepend the correct provider so the
+# Multiroute proxy knows how to route the request.
 #
-# Format:
-#   providers:
-#     <url-substring>: <provider>
-#
-# Matching checks whether the base_url contains the substring (case-insensitive).
-# Entries are tested longest-first so more specific URLs win.
+# Keys are exact hostnames (case-insensitive).  Add a new entry here whenever
+# a new provider or deployment domain needs to be supported.
 
 providers:
   api.openai.com: openai
