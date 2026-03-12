@@ -2,6 +2,8 @@ import json
 import pytest
 import respx
 import httpx
+import openai
+from unittest.mock import AsyncMock, patch
 from multiroute.google import Client
 from google.genai import types
 
@@ -349,3 +351,184 @@ def test_mixed_text_and_function_call_translation(client):
     assert assistant_msg["content"] == "Let me check that for you."
     assert len(assistant_msg["tool_calls"]) == 1
     assert assistant_msg["tool_calls"][0]["function"]["name"] == "get_weather"
+
+
+# ---------------------------------------------------------------------------
+# Async no-key path
+# ---------------------------------------------------------------------------
+
+_GOOGLE_SUCCESS_JSON = {
+    "candidates": [
+        {
+            "content": {
+                "role": "model",
+                "parts": [{"text": "Direct Google async!"}],
+            },
+            "finishReason": "STOP",
+        }
+    ],
+    "usageMetadata": {
+        "promptTokenCount": 3,
+        "candidatesTokenCount": 3,
+        "totalTokenCount": 6,
+    },
+}
+
+
+@respx.mock
+async def test_async_generate_content_no_multiroute_key(client, monkeypatch):
+    """aio.models.generate_content calls native Google directly when no key is set."""
+    monkeypatch.delenv("MULTIROUTE_API_KEY", raising=False)
+
+    multiroute_route = respx.post(
+        "https://api.multiroute.ai/openai/v1/chat/completions"
+    ).mock(return_value=httpx.Response(200, json={}))
+
+    # Build a fake native Google response
+    native_response = types.GenerateContentResponse(
+        candidates=[
+            types.Candidate(
+                content=types.Content(
+                    role="model",
+                    parts=[types.Part(text="Direct Google async!")],
+                ),
+                finish_reason=types.FinishReason.STOP,
+            )
+        ]
+    )
+
+    # Patch the original aio.models.generate_content (the one before our wrapper)
+    with patch.object(
+        client._async_multiroute_models,
+        "_original_generate_content",
+        new=AsyncMock(return_value=native_response),
+    ) as mock_native:
+        response = await client.aio.models.generate_content(
+            model="gemini-2.0-flash", contents="Hi"
+        )
+
+    assert response.text == "Direct Google async!"
+    assert not multiroute_route.called
+    mock_native.assert_called_once()
+
+
+@respx.mock
+async def test_async_generate_content_fallback_500(client):
+    """aio.models.generate_content falls back to native Google on proxy 500."""
+    multiroute_route = respx.post(
+        "https://api.multiroute.ai/openai/v1/chat/completions"
+    ).mock(return_value=httpx.Response(500, json={"error": "proxy failed"}))
+
+    native_response = types.GenerateContentResponse(
+        candidates=[
+            types.Candidate(
+                content=types.Content(
+                    role="model",
+                    parts=[types.Part(text="Direct Google async!")],
+                ),
+                finish_reason=types.FinishReason.STOP,
+            )
+        ]
+    )
+
+    with patch.object(
+        client._async_multiroute_models,
+        "_original_generate_content",
+        new=AsyncMock(return_value=native_response),
+    ) as mock_native:
+        response = await client.aio.models.generate_content(
+            model="gemini-2.0-flash", contents="Hi"
+        )
+
+    assert response.text == "Direct Google async!"
+    assert multiroute_route.called
+    mock_native.assert_called_once()
+
+
+@respx.mock
+async def test_async_generate_content_fallback_connection_error(client):
+    """aio.models.generate_content falls back to native Google on proxy connection error."""
+    multiroute_route = respx.post(
+        "https://api.multiroute.ai/openai/v1/chat/completions"
+    ).mock(side_effect=httpx.ConnectError("Connection refused"))
+
+    native_response = types.GenerateContentResponse(
+        candidates=[
+            types.Candidate(
+                content=types.Content(
+                    role="model",
+                    parts=[types.Part(text="Async fallback after connect error!")],
+                ),
+                finish_reason=types.FinishReason.STOP,
+            )
+        ]
+    )
+
+    with patch.object(
+        client._async_multiroute_models,
+        "_original_generate_content",
+        new=AsyncMock(return_value=native_response),
+    ) as mock_native:
+        response = await client.aio.models.generate_content(
+            model="gemini-2.0-flash", contents="Hi"
+        )
+
+    assert response.text == "Async fallback after connect error!"
+    assert multiroute_route.called
+    mock_native.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Non-multiroute errors are re-raised
+# ---------------------------------------------------------------------------
+
+
+@respx.mock
+def test_generate_content_non_multiroute_error_reraised(client):
+    """A 401 authentication error from the proxy should be re-raised, not swallowed."""
+    respx.post("https://api.multiroute.ai/openai/v1/chat/completions").mock(
+        return_value=httpx.Response(
+            401,
+            json={
+                "error": {"message": "Invalid API key", "type": "authentication_error"}
+            },
+        )
+    )
+
+    with pytest.raises(openai.AuthenticationError):
+        client.models.generate_content(model="gemini-2.0-flash", contents="Hi")
+
+
+# ---------------------------------------------------------------------------
+# finish_reason=length -> FinishReason.MAX_TOKENS
+# ---------------------------------------------------------------------------
+
+
+@respx.mock
+def test_finish_reason_length_maps_to_max_tokens(client):
+    """finish_reason='length' from OpenAI should map to MAX_TOKENS in Google response."""
+    respx.post("https://api.multiroute.ai/openai/v1/chat/completions").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "id": "chatcmpl-len",
+                "choices": [
+                    {
+                        "message": {"role": "assistant", "content": "truncated..."},
+                        "finish_reason": "length",
+                    }
+                ],
+                "usage": {
+                    "prompt_tokens": 10,
+                    "completion_tokens": 50,
+                    "total_tokens": 60,
+                },
+            },
+        )
+    )
+
+    response = client.models.generate_content(
+        model="gemini-2.0-flash", contents="Tell me a long story"
+    )
+
+    assert response.candidates[0].finish_reason == types.FinishReason.MAX_TOKENS

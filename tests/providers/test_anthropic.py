@@ -2,6 +2,8 @@ import pytest
 import respx
 import httpx
 import json
+import openai
+import anthropic
 from multiroute.anthropic import Anthropic, AsyncAnthropic
 from multiroute.anthropic.client import MULTIROUTE_BASE_URL
 
@@ -511,3 +513,276 @@ def test_mixed_text_and_tool_use_translation(client):
     assert assistant_msg["content"] == "I will check the weather now."
     assert len(assistant_msg["tool_calls"]) == 1
     assert assistant_msg["tool_calls"][0]["function"]["name"] == "get_weather"
+
+
+# ---------------------------------------------------------------------------
+# Async no-key path
+# ---------------------------------------------------------------------------
+
+_ANTHROPIC_SUCCESS_JSON = {
+    "id": "msg_123",
+    "type": "message",
+    "role": "assistant",
+    "model": "claude-3-5-sonnet-20241022",
+    "stop_reason": "end_turn",
+    "stop_sequence": None,
+    "content": [{"type": "text", "text": "Direct Anthropic async!"}],
+    "usage": {"input_tokens": 9, "output_tokens": 12},
+}
+
+
+@respx.mock
+async def test_async_messages_no_multiroute_key(async_client, monkeypatch):
+    """AsyncAnthropic calls native Anthropic directly when no key is set."""
+    monkeypatch.delenv("MULTIROUTE_API_KEY", raising=False)
+
+    multiroute_route = respx.post(f"{MULTIROUTE_BASE_URL}/chat/completions").mock(
+        return_value=httpx.Response(200, json={})
+    )
+
+    anthropic_route = respx.post("https://api.anthropic.com/v1/messages").mock(
+        return_value=httpx.Response(200, json=_ANTHROPIC_SUCCESS_JSON)
+    )
+
+    response = await async_client.messages.create(
+        model="claude-3-5-sonnet-20241022",
+        messages=[{"role": "user", "content": "Hello!"}],
+        max_tokens=100,
+    )
+
+    assert response.content[0].text == "Direct Anthropic async!"
+    assert not multiroute_route.called
+    assert anthropic_route.called
+
+
+# ---------------------------------------------------------------------------
+# Async connection-error fallback
+# ---------------------------------------------------------------------------
+
+
+@respx.mock
+async def test_async_messages_fallback_connection_error(async_client):
+    """AsyncAnthropic falls back to native when proxy raises a connection error."""
+    multiroute_route = respx.post(f"{MULTIROUTE_BASE_URL}/chat/completions").mock(
+        side_effect=httpx.ConnectError("Connection refused")
+    )
+
+    anthropic_route = respx.post("https://api.anthropic.com/v1/messages").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "id": "msg_conn_async",
+                "type": "message",
+                "role": "assistant",
+                "model": "claude-3-5-sonnet-20241022",
+                "stop_reason": "end_turn",
+                "stop_sequence": None,
+                "content": [
+                    {"type": "text", "text": "Async fallback after connect error!"}
+                ],
+                "usage": {"input_tokens": 5, "output_tokens": 8},
+            },
+        )
+    )
+
+    response = await async_client.messages.create(
+        model="claude-3-5-sonnet-20241022",
+        messages=[{"role": "user", "content": "Hello!"}],
+        max_tokens=100,
+    )
+
+    assert response.content[0].text == "Async fallback after connect error!"
+    assert multiroute_route.called
+    assert anthropic_route.called
+
+
+# ---------------------------------------------------------------------------
+# System prompt translation
+# ---------------------------------------------------------------------------
+
+
+@respx.mock
+def test_system_prompt_translation(client):
+    """A 'system' kwarg should appear as a system-role message in the proxy request."""
+    multiroute_route = respx.post(f"{MULTIROUTE_BASE_URL}/chat/completions").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "id": "chatcmpl-sys",
+                "choices": [
+                    {
+                        "message": {"role": "assistant", "content": "Got it."},
+                        "finish_reason": "stop",
+                    }
+                ],
+                "usage": {
+                    "prompt_tokens": 10,
+                    "completion_tokens": 3,
+                    "total_tokens": 13,
+                },
+            },
+        )
+    )
+
+    client.messages.create(
+        model="claude-3-5-sonnet-20241022",
+        system="You are a helpful assistant.",
+        messages=[{"role": "user", "content": "Hello!"}],
+        max_tokens=50,
+    )
+
+    assert multiroute_route.called
+    req_json = json.loads(multiroute_route.calls.last.request.content)
+    messages = req_json["messages"]
+
+    system_msgs = [m for m in messages if m.get("role") == "system"]
+    assert len(system_msgs) == 1
+    assert system_msgs[0]["content"] == "You are a helpful assistant."
+
+
+@respx.mock
+def test_list_system_prompt_translation(client):
+    """A list-style 'system' kwarg (text blocks) should be joined into a single string."""
+    multiroute_route = respx.post(f"{MULTIROUTE_BASE_URL}/chat/completions").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "id": "chatcmpl-sys-list",
+                "choices": [
+                    {
+                        "message": {"role": "assistant", "content": "Ok."},
+                        "finish_reason": "stop",
+                    }
+                ],
+                "usage": {
+                    "prompt_tokens": 8,
+                    "completion_tokens": 2,
+                    "total_tokens": 10,
+                },
+            },
+        )
+    )
+
+    client.messages.create(
+        model="claude-3-5-sonnet-20241022",
+        system=[
+            {"type": "text", "text": "You are helpful."},
+            {"type": "text", "text": " Be concise."},
+        ],
+        messages=[{"role": "user", "content": "Hi"}],
+        max_tokens=50,
+    )
+
+    assert multiroute_route.called
+    req_json = json.loads(multiroute_route.calls.last.request.content)
+    messages = req_json["messages"]
+
+    system_msgs = [m for m in messages if m.get("role") == "system"]
+    assert len(system_msgs) == 1
+    assert system_msgs[0]["content"] == "You are helpful. Be concise."
+
+
+# ---------------------------------------------------------------------------
+# temperature / top_p / stop_sequences translation
+# ---------------------------------------------------------------------------
+
+
+@respx.mock
+def test_sampling_params_translation(client):
+    """temperature, top_p, and stop_sequences are forwarded to the proxy request."""
+    multiroute_route = respx.post(f"{MULTIROUTE_BASE_URL}/chat/completions").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "id": "chatcmpl-sampling",
+                "choices": [
+                    {
+                        "message": {"role": "assistant", "content": "Done."},
+                        "finish_reason": "stop",
+                    }
+                ],
+                "usage": {
+                    "prompt_tokens": 5,
+                    "completion_tokens": 2,
+                    "total_tokens": 7,
+                },
+            },
+        )
+    )
+
+    client.messages.create(
+        model="claude-3-5-sonnet-20241022",
+        messages=[{"role": "user", "content": "Hi"}],
+        max_tokens=50,
+        temperature=0.3,
+        top_p=0.9,
+        stop_sequences=["STOP", "END"],
+    )
+
+    assert multiroute_route.called
+    req_json = json.loads(multiroute_route.calls.last.request.content)
+    assert req_json["temperature"] == 0.3
+    assert req_json["top_p"] == 0.9
+    assert req_json["stop"] == ["STOP", "END"]
+
+
+# ---------------------------------------------------------------------------
+# finish_reason=length -> stop_reason=max_tokens
+# ---------------------------------------------------------------------------
+
+
+@respx.mock
+def test_finish_reason_length_maps_to_max_tokens(client):
+    """finish_reason='length' from OpenAI should map to stop_reason='max_tokens' in Anthropic."""
+    respx.post(f"{MULTIROUTE_BASE_URL}/chat/completions").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "id": "chatcmpl-len",
+                "choices": [
+                    {
+                        "message": {"role": "assistant", "content": "truncated..."},
+                        "finish_reason": "length",
+                    }
+                ],
+                "usage": {
+                    "prompt_tokens": 10,
+                    "completion_tokens": 50,
+                    "total_tokens": 60,
+                },
+            },
+        )
+    )
+
+    response = client.messages.create(
+        model="claude-3-5-sonnet-20241022",
+        messages=[{"role": "user", "content": "Tell me a long story"}],
+        max_tokens=50,
+    )
+
+    assert response.stop_reason == "max_tokens"
+
+
+# ---------------------------------------------------------------------------
+# Non-multiroute errors are re-raised
+# ---------------------------------------------------------------------------
+
+
+@respx.mock
+def test_messages_non_multiroute_error_reraised(client):
+    """A 401 authentication error from the proxy should be re-raised, not swallowed."""
+    respx.post(f"{MULTIROUTE_BASE_URL}/chat/completions").mock(
+        return_value=httpx.Response(
+            401,
+            json={
+                "error": {"message": "Invalid API key", "type": "authentication_error"}
+            },
+        )
+    )
+
+    with pytest.raises(openai.AuthenticationError):
+        client.messages.create(
+            model="claude-3-5-sonnet-20241022",
+            messages=[{"role": "user", "content": "Hello!"}],
+            max_tokens=50,
+        )

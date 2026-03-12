@@ -1,6 +1,7 @@
 import pytest
 from unittest.mock import patch, AsyncMock
-from litellm.exceptions import InternalServerError
+import httpx
+from litellm.exceptions import InternalServerError, APIConnectionError
 
 from multiroute.litellm import completion, acompletion
 
@@ -21,7 +22,7 @@ def test_litellm_completion_proxy_success(mock_env):
         assert response == "proxy_success"
         mock_completion.assert_called_once()
         kwargs = mock_completion.call_args.kwargs
-        assert kwargs["model"] == "claude-3-opus"
+        assert kwargs["model"] == "anthropic/claude-3-opus"
         assert kwargs["api_base"] == "https://api.multiroute.ai/v1"
         assert kwargs["api_key"] == "test-multiroute-key"
         assert kwargs["custom_llm_provider"] == "openai"
@@ -95,3 +96,106 @@ def test_litellm_completion_no_key(monkeypatch):
         kwargs = mock_completion.call_args.kwargs
         assert "api_base" not in kwargs
         assert "custom_llm_provider" not in kwargs
+
+
+# ---------------------------------------------------------------------------
+# acompletion — no key path
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_litellm_acompletion_no_key(monkeypatch):
+    """acompletion without MULTIROUTE_API_KEY calls litellm directly."""
+    monkeypatch.delenv("MULTIROUTE_API_KEY", raising=False)
+    with patch(
+        "multiroute.litellm.client.litellm.acompletion", new_callable=AsyncMock
+    ) as mock_acompletion:
+        mock_acompletion.return_value = "direct_async_success"
+
+        response = await acompletion(
+            model="gpt-4o", messages=[{"role": "user", "content": "hello"}]
+        )
+
+        assert response == "direct_async_success"
+        mock_acompletion.assert_called_once()
+        kwargs = mock_acompletion.call_args.kwargs
+        assert "api_base" not in kwargs
+        assert "custom_llm_provider" not in kwargs
+
+
+# ---------------------------------------------------------------------------
+# Connection error triggers fallback
+# ---------------------------------------------------------------------------
+
+
+def test_litellm_completion_connection_error_fallback(mock_env):
+    """An APIConnectionError from the proxy triggers fallback to native litellm."""
+    with patch("multiroute.litellm.client.litellm.completion") as mock_completion:
+        error = APIConnectionError(
+            message="Connection refused",
+            model="gpt-4o",
+            llm_provider="openai",
+        )
+        mock_completion.side_effect = [error, "conn_fallback_success"]
+
+        response = completion(
+            model="gpt-4o", messages=[{"role": "user", "content": "hello"}]
+        )
+
+        assert response == "conn_fallback_success"
+        assert mock_completion.call_count == 2
+
+        fallback_kwargs = mock_completion.call_args_list[1].kwargs
+        assert "api_base" not in fallback_kwargs
+        assert "custom_llm_provider" not in fallback_kwargs
+
+
+# ---------------------------------------------------------------------------
+# Non-multiroute errors are re-raised
+# ---------------------------------------------------------------------------
+
+
+def test_litellm_completion_non_multiroute_error_reraised(mock_env):
+    """A ValueError (non-multiroute error) from the proxy is re-raised, not swallowed."""
+    with patch("multiroute.litellm.client.litellm.completion") as mock_completion:
+        mock_completion.side_effect = ValueError("bad input")
+
+        with pytest.raises(ValueError, match="bad input"):
+            completion(model="gpt-4o", messages=[{"role": "user", "content": "hello"}])
+
+        # Only one call — no fallback attempted
+        assert mock_completion.call_count == 1
+
+
+# ---------------------------------------------------------------------------
+# resolve_model prefix applied to proxy call
+# ---------------------------------------------------------------------------
+
+
+def test_litellm_completion_resolve_model_prefixes_gpt(mock_env):
+    """resolve_model should prefix known model names (gpt-4o -> openai/gpt-4o)."""
+    with patch("multiroute.litellm.client.litellm.completion") as mock_completion:
+        mock_completion.return_value = "ok"
+
+        completion(model="gpt-4o", messages=[{"role": "user", "content": "hi"}])
+
+        mock_completion.assert_called_once()
+        kwargs = mock_completion.call_args.kwargs
+        assert kwargs["model"] == "openai/gpt-4o"
+        assert kwargs["api_base"] == "https://api.multiroute.ai/v1"
+
+
+def test_litellm_completion_unknown_model_unchanged(mock_env):
+    """An unknown model name should be passed through unchanged to the proxy."""
+    with patch("multiroute.litellm.client.litellm.completion") as mock_completion:
+        mock_completion.return_value = "ok"
+
+        completion(
+            model="my-custom-local-llm",
+            messages=[{"role": "user", "content": "hi"}],
+        )
+
+        mock_completion.assert_called_once()
+        kwargs = mock_completion.call_args.kwargs
+        # Unknown model stays unprefixed
+        assert kwargs["model"] == "my-custom-local-llm"
