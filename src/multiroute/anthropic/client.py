@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import os
 from typing import Any, Dict
@@ -59,14 +61,16 @@ def _get_shared_async_openai_client() -> openai.AsyncOpenAI:
     return _shared_async_openai_client
 
 
-def _anthropic_to_openai_request(kwargs: Dict[str, Any]) -> Dict[str, Any]:
+def _anthropic_to_openai_request(
+    kwargs: Dict[str, Any], base_url: str | None = None
+) -> Dict[str, Any]:
     """Convert Anthropic messages request parameters to OpenAI chat/completions format."""
     openai_req = {}
     model = kwargs["model"]
 
     # Model
     if "model" in kwargs:
-        openai_req["model"] = resolve_model(model)
+        openai_req["model"] = resolve_model(model, base_url)
 
     # System prompt -> role: system
     messages = []
@@ -319,10 +323,10 @@ class MultirouteMessages(Messages):
         if not os.environ.get("MULTIROUTE_API_KEY"):
             return super().create(**kwargs)
 
-        # Save original API URL and client behavior
-
         try:
-            openai_req = _anthropic_to_openai_request(kwargs)
+            openai_req = _anthropic_to_openai_request(
+                kwargs, str(self._client.base_url)
+            )
 
             client = _get_shared_openai_client().with_options(
                 api_key=os.environ.get("MULTIROUTE_API_KEY"),
@@ -345,7 +349,9 @@ class AsyncMultirouteMessages(AsyncMessages):
             return await super().create(**kwargs)
 
         try:
-            openai_req = _anthropic_to_openai_request(kwargs)
+            openai_req = _anthropic_to_openai_request(
+                kwargs, str(self._client.base_url)
+            )
 
             client = _get_shared_async_openai_client().with_options(
                 api_key=os.environ.get("MULTIROUTE_API_KEY"),

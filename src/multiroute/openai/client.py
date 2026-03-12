@@ -40,7 +40,10 @@ class MultirouteChatCompletions(ChatCompletions):
         )
 
         try:
-            multiroute_kwargs = {**kwargs, "model": resolve_model(kwargs["model"])}
+            multiroute_kwargs = {
+                **kwargs,
+                "model": resolve_model(kwargs["model"], str(self._client.base_url)),
+            }
             return ChatCompletions(temp_client).create(**multiroute_kwargs)
         except Exception as e:
             if _is_multiroute_error(e):
@@ -59,7 +62,10 @@ class AsyncMultirouteChatCompletions(AsyncChatCompletions):
         )
 
         try:
-            multiroute_kwargs = {**kwargs, "model": resolve_model(kwargs["model"])}
+            multiroute_kwargs = {
+                **kwargs,
+                "model": resolve_model(kwargs["model"], str(self._client.base_url)),
+            }
             return await AsyncChatCompletions(temp_client).create(**multiroute_kwargs)
         except Exception as e:
             if _is_multiroute_error(e):
@@ -77,7 +83,10 @@ class MultirouteResponses(Responses):
         )
 
         try:
-            multiroute_kwargs = {**kwargs, "model": resolve_model(kwargs["model"])}
+            multiroute_kwargs = {
+                **kwargs,
+                "model": resolve_model(kwargs["model"], str(self._client.base_url)),
+            }
             return Responses(temp_client).create(**multiroute_kwargs)
         except Exception as e:
             if _is_multiroute_error(e):
@@ -95,7 +104,10 @@ class AsyncMultirouteResponses(AsyncResponses):
         )
 
         try:
-            multiroute_kwargs = {**kwargs, "model": resolve_model(kwargs["model"])}
+            multiroute_kwargs = {
+                **kwargs,
+                "model": resolve_model(kwargs["model"], str(self._client.base_url)),
+            }
             return await AsyncResponses(temp_client).create(**multiroute_kwargs)
         except Exception as e:
             if _is_multiroute_error(e):

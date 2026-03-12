@@ -1,84 +1,31 @@
-# Model registry: maps model names (and common aliases) to their provider.
+# URL registry: maps base URL substrings to provider names.
 # When a request is made without a provider prefix (e.g. "gpt-4o" instead of
-# "openai/gpt-4o"), the resolver looks up this file and prepends the provider
-# so the Multiroute proxy knows how to route the request.
+# "openai/gpt-4o"), the resolver inspects the client's base_url and looks up
+# this file to prepend the correct provider so the Multiroute proxy knows how
+# to route the request.
 #
 # Format:
-#   <provider>:
-#     - <model-name-or-alias>
+#   url_providers:
+#     <url-substring>: <provider>
 #
-# Matching is case-insensitive and uses prefix matching, so "gpt-4o-mini-2024"
-# will match the "gpt-4o-mini" entry under openai.
+# Matching checks whether the base_url contains the substring (case-insensitive).
+# Entries are tested longest-first so more specific URLs win.
 
-openai:
-  # GPT-4o family
-  - gpt-4o
-  - gpt-4o-mini
-  - gpt-4o-audio-preview
-  - gpt-4o-realtime-preview
-  # GPT-4 family
-  - gpt-4-turbo
-  - gpt-4
-  # GPT-3.5 family
-  - gpt-3.5-turbo
-  # o-series
-  - o1
-  - o1-mini
-  - o1-preview
-  - o3
-  - o3-mini
-  - o4-mini
-
-anthropic:
-  # Claude 3.x / 3.5 / 3.7
-  - claude-3-5-sonnet
-  - claude-3-5-haiku
-  - claude-3-7-sonnet
-  - claude-3-opus
-  - claude-3-sonnet
-  - claude-3-haiku
-  # Claude 2.x
-  - claude-2
-  # Claude Instant
-  - claude-instant
-
-google:
-  # Gemini 2.x
-  - gemini-2.0-flash
-  - gemini-2.0-pro
-  - gemini-2.5-flash
-  - gemini-2.5-pro
-  # Gemini 1.x
-  - gemini-1.5-flash
-  - gemini-1.5-pro
-  - gemini-1.0-pro
-  - gemini-pro
-
-meta:
-  - llama-3
-  - llama-2
-  - llama3
-  - llama2
-  - meta-llama
-
-mistral:
-  - mistral-large
-  - mistral-medium
-  - mistral-small
-  - mistral-7b
-  - mixtral
-  - codestral
-  - ministral
-
-cohere:
-  - command-r
-  - command-light
-  - command
-
-deepseek:
-  - deepseek-chat
-  - deepseek-coder
-  - deepseek-reasoner
-
-xai:
-  - grok
+url_providers:
+  api.openai.com: openai
+  api.groq.com: groq
+  api.anthropic.com: anthropic
+  generativelanguage.googleapis.com: google
+  api.mistral.ai: mistral
+  api.cohere.com: cohere
+  api.cohere.ai: cohere
+  api.deepseek.com: deepseek
+  api.x.ai: xai
+  api.together.xyz: together
+  api.fireworks.ai: fireworks
+  api.perplexity.ai: perplexity
+  openrouter.ai: openrouter
+  api.cerebras.ai: cerebras
+  inference.ai.azure.com: azure
+  api.cognitive.microsoft.com: azure
+  openai.azure.com: azure

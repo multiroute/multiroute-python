@@ -1,6 +1,6 @@
 import json
 import os
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import google.genai as genai
 import httpx
@@ -96,6 +96,18 @@ def _schema_to_dict(schema: Any) -> Dict[str, Any]:
     if hasattr(schema, "items") and schema.items:
         d["items"] = _schema_to_dict(schema.items)
     return d
+
+
+def _get_client_base_url(client: Any) -> Optional[str]:
+    """Extract the base URL string from a google.genai.Client instance."""
+    # Use a defensive getattr-chain so changes to google.genai internals
+    # don't raise here, and normalize the result to a string if present.
+    api_client = getattr(client, "_api_client", None)
+    http_options = getattr(api_client, "_http_options", None)
+    base_url = getattr(http_options, "base_url", None)
+    if base_url is None:
+        return None
+    return str(base_url)
 
 
 def _google_to_openai_request(
@@ -287,7 +299,10 @@ def _google_to_openai_request(
                     # Assistant sent text AND tool call
                     messages[-1]["content"] = content_text
 
-    openai_req = {"model": resolve_model(model), "messages": messages}
+    openai_req = {
+        "model": resolve_model(model, _get_client_base_url(client)),
+        "messages": messages,
+    }
 
     if config:
         if isinstance(config, dict):

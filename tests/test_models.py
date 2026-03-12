@@ -1,104 +1,138 @@
 import pytest
 
-from multiroute.models import resolve_model, _load_registry
+from multiroute.models import resolve_model, _load_url_registry
 
 
-# --- resolver unit tests ---
+# --- already-prefixed model passthrough ---
 
 
 def test_already_prefixed_is_unchanged():
-    assert resolve_model("openai/gpt-4o") == "openai/gpt-4o"
-    assert resolve_model("anthropic/claude-3-opus") == "anthropic/claude-3-opus"
-    assert resolve_model("google/gemini-1.5-pro") == "google/gemini-1.5-pro"
-
-
-def test_bare_openai_models():
-    assert resolve_model("gpt-4o") == "openai/gpt-4o"
-    assert resolve_model("gpt-4o-mini") == "openai/gpt-4o-mini"
-    assert resolve_model("gpt-4") == "openai/gpt-4"
-    assert resolve_model("gpt-3.5-turbo") == "openai/gpt-3.5-turbo"
-    assert resolve_model("o1") == "openai/o1"
-    assert resolve_model("o3-mini") == "openai/o3-mini"
-
-
-def test_dated_variant_still_resolves():
-    """Versioned suffixes like -2024-07-18 should still match."""
-    assert resolve_model("gpt-4o-mini-2024-07-18") == "openai/gpt-4o-mini-2024-07-18"
     assert (
-        resolve_model("claude-3-5-sonnet-20241022")
-        == "anthropic/claude-3-5-sonnet-20241022"
+        resolve_model("openai/gpt-4o", "https://api.openai.com/v1/") == "openai/gpt-4o"
     )
-    assert resolve_model("claude-3-opus-20240229") == "anthropic/claude-3-opus-20240229"
+    assert (
+        resolve_model("anthropic/claude-3-opus", "https://api.anthropic.com")
+        == "anthropic/claude-3-opus"
+    )
+    assert (
+        resolve_model("groq/llama-3", "https://api.groq.com/openai/v1")
+        == "groq/llama-3"
+    )
 
 
-def test_bare_anthropic_models():
-    assert resolve_model("claude-3-5-sonnet") == "anthropic/claude-3-5-sonnet"
-    assert resolve_model("claude-3-haiku") == "anthropic/claude-3-haiku"
-    assert resolve_model("claude-2") == "anthropic/claude-2"
+# --- base_url-based provider resolution ---
 
 
-def test_bare_google_models():
-    assert resolve_model("gemini-1.5-pro") == "google/gemini-1.5-pro"
-    assert resolve_model("gemini-2.0-flash") == "google/gemini-2.0-flash"
+def test_openai_base_url():
+    assert resolve_model("gpt-4o", "https://api.openai.com/v1/") == "openai/gpt-4o"
+    assert (
+        resolve_model("gpt-4o-mini", "https://api.openai.com/v1/")
+        == "openai/gpt-4o-mini"
+    )
+    assert resolve_model("o3-mini", "https://api.openai.com/v1/") == "openai/o3-mini"
 
 
-def test_bare_other_providers():
-    assert resolve_model("mistral-large") == "mistral/mistral-large"
-    assert resolve_model("mixtral-8x7b") == "mistral/mixtral-8x7b"
-    assert resolve_model("deepseek-chat") == "deepseek/deepseek-chat"
-    assert resolve_model("command-r") == "cohere/command-r"
+def test_groq_base_url():
+    assert resolve_model("gpt-4o", "https://api.groq.com/openai/v1") == "groq/gpt-4o"
+    assert (
+        resolve_model("llama-3-70b", "https://api.groq.com/openai/v1")
+        == "groq/llama-3-70b"
+    )
 
 
-def test_unknown_model_is_unchanged():
-    assert resolve_model("my-custom-finetuned-model") == "my-custom-finetuned-model"
-    assert resolve_model("some-local-llm") == "some-local-llm"
+def test_anthropic_base_url():
+    assert (
+        resolve_model("claude-3-opus", "https://api.anthropic.com")
+        == "anthropic/claude-3-opus"
+    )
+    assert (
+        resolve_model("claude-3-5-sonnet", "https://api.anthropic.com/v1")
+        == "anthropic/claude-3-5-sonnet"
+    )
 
 
-def test_empty_string_is_unchanged():
+def test_google_base_url():
+    assert (
+        resolve_model("gemini-1.5-pro", "https://generativelanguage.googleapis.com/")
+        == "google/gemini-1.5-pro"
+    )
+
+
+def test_mistral_base_url():
+    assert (
+        resolve_model("mistral-large", "https://api.mistral.ai/v1")
+        == "mistral/mistral-large"
+    )
+
+
+def test_together_base_url():
+    assert (
+        resolve_model("llama-3-70b", "https://api.together.xyz/v1")
+        == "together/llama-3-70b"
+    )
+
+
+def test_openrouter_base_url():
+    assert (
+        resolve_model("gpt-4o", "https://openrouter.ai/api/v1") == "openrouter/gpt-4o"
+    )
+
+
+def test_azure_base_url():
+    assert (
+        resolve_model("gpt-4o", "https://my-resource.openai.azure.com/")
+        == "azure/gpt-4o"
+    )
+
+
+# --- no base_url or unknown URL → unchanged ---
+
+
+def test_no_base_url_returns_model_unchanged():
+    assert resolve_model("gpt-4o") == "gpt-4o"
+    assert resolve_model("claude-3-opus") == "claude-3-opus"
+    assert resolve_model("some-custom-model") == "some-custom-model"
+
+
+def test_unknown_base_url_returns_model_unchanged():
+    assert resolve_model("gpt-4o", "https://unknown-proxy.example.com") == "gpt-4o"
+    assert resolve_model("my-model", "https://private-llm.internal") == "my-model"
+
+
+def test_empty_model_is_unchanged():
     assert resolve_model("") == ""
+    assert resolve_model("", "https://api.openai.com/v1/") == ""
 
 
-def test_case_insensitive():
-    assert resolve_model("GPT-4O") == "openai/GPT-4O"
-    assert resolve_model("Claude-3-Opus") == "anthropic/Claude-3-Opus"
+# --- case insensitivity ---
 
 
-def test_registry_loads_once(monkeypatch):
-    """_load_registry is cached; calling it twice should return the same object."""
-    _load_registry.cache_clear()
-    first = _load_registry()
-    second = _load_registry()
+def test_base_url_matching_is_case_insensitive():
+    assert resolve_model("gpt-4o", "https://API.OPENAI.COM/v1/") == "openai/gpt-4o"
+    assert resolve_model("gpt-4o", "https://Api.Groq.Com/openai/v1") == "groq/gpt-4o"
+
+
+def test_model_casing_is_preserved():
+    assert resolve_model("GPT-4O", "https://api.openai.com/v1/") == "openai/GPT-4O"
+    assert (
+        resolve_model("Claude-3-Opus", "https://api.anthropic.com")
+        == "anthropic/Claude-3-Opus"
+    )
+
+
+# --- registry loading ---
+
+
+def test_url_registry_loads_once(monkeypatch):
+    """_load_url_registry is cached; calling it twice should return the same object."""
+    _load_url_registry.cache_clear()
+    first = _load_url_registry()
+    second = _load_url_registry()
     assert first is second
 
 
-def test_bare_meta_models():
-    """Meta/Llama models should resolve to the 'meta' provider."""
-    assert resolve_model("llama-3") == "meta/llama-3"
-    assert resolve_model("llama-3-70b-instruct") == "meta/llama-3-70b-instruct"
-    assert resolve_model("meta-llama-3") == "meta/meta-llama-3"
-
-
-def test_bare_xai_models():
-    """xAI Grok models should resolve to the 'xai' provider."""
-    assert resolve_model("grok") == "xai/grok"
-    assert resolve_model("grok-2") == "xai/grok-2"
-    assert resolve_model("grok-beta") == "xai/grok-beta"
-
-
-def test_dot_separator_prefix_matching():
-    """The resolver handles 'model.version' style names via the '.' separator."""
-    # gemini-1.5-pro.001 should still match the gemini-1.5-pro pattern
-    assert resolve_model("gemini-1.5-pro.001") == "google/gemini-1.5-pro.001"
-
-
-def test_more_specific_pattern_wins():
-    """Longer (more specific) patterns should take precedence over shorter ones.
-
-    gpt-4o-mini is more specific than gpt-4o, so 'gpt-4o-mini-2024' must map
-    to openai/... via the gpt-4o-mini entry, not gpt-4o.
-    """
-    result = resolve_model("gpt-4o-mini-2024-07-18")
-    assert result == "openai/gpt-4o-mini-2024-07-18"
-    # Confirm it is NOT matching the shorter 'gpt-4o' pattern
-    # (would produce same provider here, but the pattern chosen matters)
-    assert result.startswith("openai/")
+def test_url_registry_sorted_longest_first():
+    """Longer URL patterns should appear before shorter ones."""
+    pairs = _load_url_registry()
+    lengths = [len(pattern) for pattern, _ in pairs]
+    assert lengths == sorted(lengths, reverse=True)
