@@ -1,8 +1,9 @@
-import os
 import asyncio
+import os
+
+from google.genai import types
 
 from multiroute.google import Client
-from google.genai import types
 
 # Set your API keys via environment variables before running:
 #   export GOOGLE_API_KEY="your-google-key"
@@ -16,6 +17,7 @@ def get_weather(location: str) -> str:
 
     Args:
         location: The city and state, e.g., San Francisco, CA
+
     """
     # In a real application this would call a weather API.
     # The model only sees the signature and docstring; this body runs locally.
@@ -49,9 +51,9 @@ def sync_tools_example():
             tool_responses.append(
                 types.Part(
                     function_response=types.FunctionResponse(
-                        name=func_call.name, response=tool_result
-                    )
-                )
+                        name=func_call.name, response=tool_result,
+                    ),
+                ),
             )
 
         contents.append(types.Content(role="user", parts=tool_responses))
@@ -92,9 +94,9 @@ async def async_tools_example():
             tool_responses.append(
                 types.Part(
                     function_response=types.FunctionResponse(
-                        name=func_call.name, response=tool_result
-                    )
-                )
+                        name=func_call.name, response=tool_result,
+                    ),
+                ),
             )
 
         contents.append(types.Content(role="user", parts=tool_responses))

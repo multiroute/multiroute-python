@@ -1,3 +1,3 @@
 from .client import acompletion, completion
 
-__all__ = ["completion", "acompletion"]
+__all__ = ["acompletion", "completion"]

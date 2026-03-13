@@ -1,8 +1,17 @@
 import copy
 import logging
-import os
 
-from multiroute.config import settings
+import httpx
+from litellm.exceptions import (
+    APIConnectionError,
+    APIError,
+    InternalServerError,
+    NotFoundError,
+    ServiceUnavailableError,
+    Timeout,
+)
+
+from multiroute.config import get_api_key, settings
 
 try:
     import litellm
@@ -19,15 +28,6 @@ _MISSING_KEY_MESSAGE = (
 def _is_multiroute_error(e: Exception) -> bool:
     if litellm is None:
         return False
-
-    from litellm.exceptions import (
-        APIConnectionError,
-        APIError,
-        InternalServerError,
-        NotFoundError,
-        ServiceUnavailableError,
-        Timeout,
-    )
 
     if isinstance(
         e,
@@ -46,25 +46,22 @@ def _is_multiroute_error(e: Exception) -> bool:
         if status_code and (status_code >= 500 or status_code == 404):
             return True
 
-    # Also catch httpx errors just in case litellm leaks them
-    import httpx
-
     if isinstance(e, httpx.RequestError):
         return True
-    if isinstance(e, httpx.HTTPStatusError):
-        if e.response.status_code >= 500 or e.response.status_code == 404:
-            return True
 
-    return False
+    return bool(
+        isinstance(e, httpx.HTTPStatusError)
+        and (e.response.status_code >= 500 or e.response.status_code == 404),
+    )
 
 
 def completion(**kwargs):
     if litellm is None:
         raise ImportError(
-            "litellm is not installed. Please install it with `pip install litellm`."
+            "litellm is not installed. Please install it with `pip install litellm`.",
         )
 
-    mr_api_key = os.environ.get("MULTIROUTE_API_KEY")
+    mr_api_key = kwargs.pop("multiroute_api_key", None) or get_api_key()
     if not mr_api_key:
         logging.error(_MISSING_KEY_MESSAGE)
         return litellm.completion(**kwargs)
@@ -85,10 +82,10 @@ def completion(**kwargs):
 async def acompletion(**kwargs):
     if litellm is None:
         raise ImportError(
-            "litellm is not installed. Please install it with `pip install litellm`."
+            "litellm is not installed. Please install it with `pip install litellm`.",
         )
 
-    mr_api_key = os.environ.get("MULTIROUTE_API_KEY")
+    mr_api_key = kwargs.pop("multiroute_api_key", None) or get_api_key()
     if not mr_api_key:
         logging.error(_MISSING_KEY_MESSAGE)
         return await litellm.acompletion(**kwargs)

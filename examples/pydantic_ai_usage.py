@@ -65,7 +65,7 @@ async def run_stream() -> None:
 
     print("=== run_stream ===")
     async with agent.run_stream(
-        "Write a two-sentence summary of the Python language."
+        "Write a two-sentence summary of the Python language.",
     ) as stream:
         # stream_text(delta=True) yields each new chunk as it arrives.
         async for chunk in stream.stream_text(delta=True):

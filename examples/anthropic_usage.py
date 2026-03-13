@@ -73,7 +73,7 @@ async def async_streaming_example():
             model="claude-3-5-sonnet-20241022",
             max_tokens=100,
             messages=[
-                {"role": "user", "content": "Count to three, one word per line."}
+                {"role": "user", "content": "Count to three, one word per line."},
             ],
             stream=True,
         )

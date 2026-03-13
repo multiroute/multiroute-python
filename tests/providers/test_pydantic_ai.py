@@ -5,7 +5,7 @@ import httpx
 import pytest
 import respx
 
-from multiroute.openai.client import MULTIROUTE_BASE_URL
+from multiroute.config import settings
 from multiroute.pydantic_ai import Agent, MultirouteOpenAIProvider
 
 # ---------------------------------------------------------------------------
@@ -22,7 +22,7 @@ _OPENAI_SUCCESS_JSON = {
             "index": 0,
             "message": {"role": "assistant", "content": "Hello from multiroute!"},
             "finish_reason": "stop",
-        }
+        },
     ],
     "usage": {"prompt_tokens": 5, "completion_tokens": 6, "total_tokens": 11},
 }
@@ -37,7 +37,7 @@ _OPENAI_NATIVE_JSON = {
             "index": 0,
             "message": {"role": "assistant", "content": "Hello from native OpenAI!"},
             "finish_reason": "stop",
-        }
+        },
     ],
     "usage": {"prompt_tokens": 5, "completion_tokens": 6, "total_tokens": 11},
 }
@@ -51,8 +51,9 @@ def setup_env(monkeypatch):
 
 def _make_agent():
     """Return a (Agent, OpenAIChatModel) pair using MultirouteOpenAIProvider."""
-    from pydantic_ai import Agent
     from pydantic_ai.models.openai import OpenAIChatModel
+
+    from multiroute.pydantic_ai import Agent
 
     model = OpenAIChatModel("gpt-4o", provider=MultirouteOpenAIProvider())
     agent = Agent(model)
@@ -67,11 +68,11 @@ def _make_agent():
 @respx.mock
 async def test_success_routes_through_proxy():
     """Happy path: proxy is called, native OpenAI is not, response is correct."""
-    proxy_route = respx.post(f"{MULTIROUTE_BASE_URL}/chat/completions").mock(
-        return_value=httpx.Response(200, json=_OPENAI_SUCCESS_JSON)
+    proxy_route = respx.post(f"{settings.base_url}/chat/completions").mock(
+        return_value=httpx.Response(200, json=_OPENAI_SUCCESS_JSON),
     )
     native_route = respx.post("https://api.openai.com/v1/chat/completions").mock(
-        return_value=httpx.Response(200, json=_OPENAI_NATIVE_JSON)
+        return_value=httpx.Response(200, json=_OPENAI_NATIVE_JSON),
     )
 
     agent, _ = _make_agent()
@@ -85,8 +86,8 @@ async def test_success_routes_through_proxy():
 @respx.mock
 async def test_proxy_receives_multiroute_api_key():
     """The proxy request must carry the MULTIROUTE_API_KEY as Bearer token."""
-    proxy_route = respx.post(f"{MULTIROUTE_BASE_URL}/chat/completions").mock(
-        return_value=httpx.Response(200, json=_OPENAI_SUCCESS_JSON)
+    proxy_route = respx.post(f"{settings.base_url}/chat/completions").mock(
+        return_value=httpx.Response(200, json=_OPENAI_SUCCESS_JSON),
     )
 
     agent, _ = _make_agent()
@@ -100,8 +101,8 @@ async def test_proxy_receives_multiroute_api_key():
 @respx.mock
 async def test_model_name_prefixed_for_proxy():
     """Model name must be provider-prefixed (openai/gpt-4o) in the proxy request."""
-    proxy_route = respx.post(f"{MULTIROUTE_BASE_URL}/chat/completions").mock(
-        return_value=httpx.Response(200, json=_OPENAI_SUCCESS_JSON)
+    proxy_route = respx.post(f"{settings.base_url}/chat/completions").mock(
+        return_value=httpx.Response(200, json=_OPENAI_SUCCESS_JSON),
     )
 
     agent, _ = _make_agent()
@@ -119,13 +120,14 @@ async def test_model_name_prefixed_for_proxy():
 @respx.mock
 async def test_fallback_on_proxy_500():
     """5xx from the proxy triggers fallback to native OpenAI."""
-    proxy_route = respx.post(f"{MULTIROUTE_BASE_URL}/chat/completions").mock(
+    proxy_route = respx.post(f"{settings.base_url}/chat/completions").mock(
         return_value=httpx.Response(
-            500, json={"error": {"message": "Internal Server Error"}}
-        )
+            500,
+            json={"error": {"message": "Internal Server Error"}},
+        ),
     )
     native_route = respx.post("https://api.openai.com/v1/chat/completions").mock(
-        return_value=httpx.Response(200, json=_OPENAI_NATIVE_JSON)
+        return_value=httpx.Response(200, json=_OPENAI_NATIVE_JSON),
     )
 
     agent, _ = _make_agent()
@@ -139,11 +141,11 @@ async def test_fallback_on_proxy_500():
 @respx.mock
 async def test_fallback_on_proxy_connection_error():
     """Connection error from the proxy triggers fallback to native OpenAI."""
-    proxy_route = respx.post(f"{MULTIROUTE_BASE_URL}/chat/completions").mock(
-        side_effect=httpx.ConnectError("Connection refused")
+    proxy_route = respx.post(f"{settings.base_url}/chat/completions").mock(
+        side_effect=httpx.ConnectError("Connection refused"),
     )
     native_route = respx.post("https://api.openai.com/v1/chat/completions").mock(
-        return_value=httpx.Response(200, json=_OPENAI_NATIVE_JSON)
+        return_value=httpx.Response(200, json=_OPENAI_NATIVE_JSON),
     )
 
     agent, _ = _make_agent()
@@ -157,11 +159,11 @@ async def test_fallback_on_proxy_connection_error():
 @respx.mock
 async def test_fallback_on_proxy_404():
     """404 from the proxy triggers fallback to native OpenAI."""
-    proxy_route = respx.post(f"{MULTIROUTE_BASE_URL}/chat/completions").mock(
-        return_value=httpx.Response(404, json={"detail": "Not Found"})
+    proxy_route = respx.post(f"{settings.base_url}/chat/completions").mock(
+        return_value=httpx.Response(404, json={"detail": "Not Found"}),
     )
     native_route = respx.post("https://api.openai.com/v1/chat/completions").mock(
-        return_value=httpx.Response(200, json=_OPENAI_NATIVE_JSON)
+        return_value=httpx.Response(200, json=_OPENAI_NATIVE_JSON),
     )
 
     agent, _ = _make_agent()
@@ -175,11 +177,11 @@ async def test_fallback_on_proxy_404():
 @respx.mock
 async def test_fallback_on_proxy_timeout():
     """Timeout from the proxy triggers fallback to native OpenAI."""
-    proxy_route = respx.post(f"{MULTIROUTE_BASE_URL}/chat/completions").mock(
-        side_effect=httpx.TimeoutException("timed out")
+    proxy_route = respx.post(f"{settings.base_url}/chat/completions").mock(
+        side_effect=httpx.TimeoutException("timed out"),
     )
     native_route = respx.post("https://api.openai.com/v1/chat/completions").mock(
-        return_value=httpx.Response(200, json=_OPENAI_NATIVE_JSON)
+        return_value=httpx.Response(200, json=_OPENAI_NATIVE_JSON),
     )
 
     agent, _ = _make_agent()
@@ -200,11 +202,11 @@ async def test_no_multiroute_key_skips_proxy(monkeypatch):
     """When MULTIROUTE_API_KEY is absent, requests go directly to native OpenAI."""
     monkeypatch.delenv("MULTIROUTE_API_KEY", raising=False)
 
-    proxy_route = respx.post(f"{MULTIROUTE_BASE_URL}/chat/completions").mock(
-        return_value=httpx.Response(200, json=_OPENAI_SUCCESS_JSON)
+    proxy_route = respx.post(f"{settings.base_url}/chat/completions").mock(
+        return_value=httpx.Response(200, json=_OPENAI_SUCCESS_JSON),
     )
     native_route = respx.post("https://api.openai.com/v1/chat/completions").mock(
-        return_value=httpx.Response(200, json=_OPENAI_NATIVE_JSON)
+        return_value=httpx.Response(200, json=_OPENAI_NATIVE_JSON),
     )
 
     agent, _ = _make_agent()
@@ -225,13 +227,13 @@ async def test_non_multiroute_error_reraised():
     """A 401 auth error from the proxy must be re-raised, not swallowed."""
     from pydantic_ai import ModelHTTPError
 
-    respx.post(f"{MULTIROUTE_BASE_URL}/chat/completions").mock(
+    respx.post(f"{settings.base_url}/chat/completions").mock(
         return_value=httpx.Response(
             401,
             json={
-                "error": {"message": "Invalid API key", "type": "authentication_error"}
+                "error": {"message": "Invalid API key", "type": "authentication_error"},
             },
-        )
+        ),
     )
 
     agent, _ = _make_agent()
@@ -262,11 +264,11 @@ def test_no_key_logs_error(monkeypatch, caplog):
 @respx.mock
 async def test_agent_string_model_routes_through_proxy():
     """Agent('openai:gpt-4o') automatically routes through the Multiroute proxy."""
-    proxy_route = respx.post(f"{MULTIROUTE_BASE_URL}/chat/completions").mock(
-        return_value=httpx.Response(200, json=_OPENAI_SUCCESS_JSON)
+    proxy_route = respx.post(f"{settings.base_url}/chat/completions").mock(
+        return_value=httpx.Response(200, json=_OPENAI_SUCCESS_JSON),
     )
     native_route = respx.post("https://api.openai.com/v1/chat/completions").mock(
-        return_value=httpx.Response(200, json=_OPENAI_NATIVE_JSON)
+        return_value=httpx.Response(200, json=_OPENAI_NATIVE_JSON),
     )
 
     agent = Agent("openai:gpt-4o")
@@ -280,11 +282,11 @@ async def test_agent_string_model_routes_through_proxy():
 @respx.mock
 async def test_agent_prefixed_string_model_routes_through_proxy():
     """Agent('openai:gpt-4o') (provider-prefixed) also routes through the proxy."""
-    proxy_route = respx.post(f"{MULTIROUTE_BASE_URL}/chat/completions").mock(
-        return_value=httpx.Response(200, json=_OPENAI_SUCCESS_JSON)
+    proxy_route = respx.post(f"{settings.base_url}/chat/completions").mock(
+        return_value=httpx.Response(200, json=_OPENAI_SUCCESS_JSON),
     )
     native_route = respx.post("https://api.openai.com/v1/chat/completions").mock(
-        return_value=httpx.Response(200, json=_OPENAI_NATIVE_JSON)
+        return_value=httpx.Response(200, json=_OPENAI_NATIVE_JSON),
     )
 
     agent = Agent("openai:gpt-4o")
@@ -298,13 +300,14 @@ async def test_agent_prefixed_string_model_routes_through_proxy():
 @respx.mock
 async def test_agent_string_model_fallback_on_proxy_500():
     """Agent('openai:gpt-4o') falls back to native OpenAI when the proxy returns 5xx."""
-    proxy_route = respx.post(f"{MULTIROUTE_BASE_URL}/chat/completions").mock(
+    proxy_route = respx.post(f"{settings.base_url}/chat/completions").mock(
         return_value=httpx.Response(
-            500, json={"error": {"message": "Internal Server Error"}}
-        )
+            500,
+            json={"error": {"message": "Internal Server Error"}},
+        ),
     )
     native_route = respx.post("https://api.openai.com/v1/chat/completions").mock(
-        return_value=httpx.Response(200, json=_OPENAI_NATIVE_JSON)
+        return_value=httpx.Response(200, json=_OPENAI_NATIVE_JSON),
     )
 
     agent = Agent("openai:gpt-4o")
@@ -320,11 +323,11 @@ async def test_agent_string_model_no_multiroute_key_skips_proxy(monkeypatch):
     """Agent('openai:gpt-4o') goes directly to native OpenAI when MULTIROUTE_API_KEY is absent."""
     monkeypatch.delenv("MULTIROUTE_API_KEY", raising=False)
 
-    proxy_route = respx.post(f"{MULTIROUTE_BASE_URL}/chat/completions").mock(
-        return_value=httpx.Response(200, json=_OPENAI_SUCCESS_JSON)
+    proxy_route = respx.post(f"{settings.base_url}/chat/completions").mock(
+        return_value=httpx.Response(200, json=_OPENAI_SUCCESS_JSON),
     )
     native_route = respx.post("https://api.openai.com/v1/chat/completions").mock(
-        return_value=httpx.Response(200, json=_OPENAI_NATIVE_JSON)
+        return_value=httpx.Response(200, json=_OPENAI_NATIVE_JSON),
     )
 
     agent = Agent("openai:gpt-4o")

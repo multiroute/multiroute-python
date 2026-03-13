@@ -26,7 +26,7 @@ tools = [
             },
             "required": ["location"],
         },
-    }
+    },
 ]
 
 
@@ -59,7 +59,7 @@ def sync_tools_example():
             print(f"  Tool result: {tool_result}")
 
             tool_results.append(
-                {"type": "tool_result", "tool_use_id": block.id, "content": tool_result}
+                {"type": "tool_result", "tool_use_id": block.id, "content": tool_result},
             )
         elif block.type == "text" and block.text:
             print(f"  Text: {block.text}")
@@ -106,7 +106,7 @@ async def async_tools_example():
             print(f"  Tool result: {tool_result}")
 
             tool_results.append(
-                {"type": "tool_result", "tool_use_id": block.id, "content": tool_result}
+                {"type": "tool_result", "tool_use_id": block.id, "content": tool_result},
             )
         elif block.type == "text" and block.text:
             print(f"  Text: {block.text}")

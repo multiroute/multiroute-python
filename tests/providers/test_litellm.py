@@ -1,14 +1,14 @@
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import patch, AsyncMock
-import httpx
 from litellm.exceptions import (
-    InternalServerError,
     APIConnectionError,
+    InternalServerError,
     NotFoundError,
     Timeout,
 )
 
-from multiroute.litellm import completion, acompletion
+from multiroute.litellm import acompletion, completion
 
 
 @pytest.fixture
@@ -21,14 +21,15 @@ def test_litellm_completion_proxy_success(mock_env):
         mock_completion.return_value = "proxy_success"
 
         response = completion(
-            model="claude-3-opus", messages=[{"role": "user", "content": "hello"}]
+            model="claude-3-opus",
+            messages=[{"role": "user", "content": "hello"}],
         )
 
         assert response == "proxy_success"
         mock_completion.assert_called_once()
         kwargs = mock_completion.call_args.kwargs
         assert kwargs["model"] == "claude-3-opus"
-        assert kwargs["api_base"] == "https://api.multiroute.ai/v1"
+        assert kwargs["api_base"] == "https://api.multiroute.ai/openai/v1"
         assert kwargs["api_key"] == "test-multiroute-key"
         assert kwargs["custom_llm_provider"] == "openai"
 
@@ -37,12 +38,15 @@ def test_litellm_completion_proxy_fallback(mock_env):
     with patch("multiroute.litellm.client.litellm.completion") as mock_completion:
         # First call fails with 500, second call succeeds
         error = InternalServerError(
-            message="Proxy error", model="claude-3-opus", llm_provider="openai"
+            message="Proxy error",
+            model="claude-3-opus",
+            llm_provider="openai",
         )
         mock_completion.side_effect = [error, "fallback_success"]
 
         response = completion(
-            model="claude-3-opus", messages=[{"role": "user", "content": "hello"}]
+            model="claude-3-opus",
+            messages=[{"role": "user", "content": "hello"}],
         )
 
         assert response == "fallback_success"
@@ -50,7 +54,7 @@ def test_litellm_completion_proxy_fallback(mock_env):
 
         # Check first call (proxy)
         proxy_kwargs = mock_completion.call_args_list[0].kwargs
-        assert proxy_kwargs["api_base"] == "https://api.multiroute.ai/v1"
+        assert proxy_kwargs["api_base"] == "https://api.multiroute.ai/openai/v1"
         assert proxy_kwargs["custom_llm_provider"] == "openai"
 
         # Check second call (fallback)
@@ -63,22 +67,26 @@ def test_litellm_completion_proxy_fallback(mock_env):
 @pytest.mark.asyncio
 async def test_litellm_acompletion_proxy_fallback(mock_env):
     with patch(
-        "multiroute.litellm.client.litellm.acompletion", new_callable=AsyncMock
+        "multiroute.litellm.client.litellm.acompletion",
+        new_callable=AsyncMock,
     ) as mock_acompletion:
         error = InternalServerError(
-            message="Proxy error", model="gpt-4", llm_provider="openai"
+            message="Proxy error",
+            model="gpt-4",
+            llm_provider="openai",
         )
         mock_acompletion.side_effect = [error, "async_fallback_success"]
 
         response = await acompletion(
-            model="gpt-4", messages=[{"role": "user", "content": "hello"}]
+            model="gpt-4",
+            messages=[{"role": "user", "content": "hello"}],
         )
 
         assert response == "async_fallback_success"
         assert mock_acompletion.call_count == 2
 
         proxy_kwargs = mock_acompletion.call_args_list[0].kwargs
-        assert proxy_kwargs["api_base"] == "https://api.multiroute.ai/v1"
+        assert proxy_kwargs["api_base"] == "https://api.multiroute.ai/openai/v1"
         assert proxy_kwargs["custom_llm_provider"] == "openai"
 
         fallback_kwargs = mock_acompletion.call_args_list[1].kwargs
@@ -96,7 +104,8 @@ def test_litellm_completion_no_key(monkeypatch, caplog):
 
         with caplog.at_level(logging.ERROR):
             response = completion(
-                model="claude-3-opus", messages=[{"role": "user", "content": "hello"}]
+                model="claude-3-opus",
+                messages=[{"role": "user", "content": "hello"}],
             )
 
         assert "MULTIROUTE_API_KEY is not set" in caplog.text
@@ -114,18 +123,20 @@ def test_litellm_completion_no_key(monkeypatch, caplog):
 
 @pytest.mark.asyncio
 async def test_litellm_acompletion_no_key(monkeypatch, caplog):
-    """acompletion without MULTIROUTE_API_KEY calls litellm directly."""
+    """Acompletion without MULTIROUTE_API_KEY calls litellm directly."""
     monkeypatch.delenv("MULTIROUTE_API_KEY", raising=False)
     import logging
 
     with patch(
-        "multiroute.litellm.client.litellm.acompletion", new_callable=AsyncMock
+        "multiroute.litellm.client.litellm.acompletion",
+        new_callable=AsyncMock,
     ) as mock_acompletion:
         mock_acompletion.return_value = "direct_async_success"
 
         with caplog.at_level(logging.ERROR):
             response = await acompletion(
-                model="gpt-4o", messages=[{"role": "user", "content": "hello"}]
+                model="gpt-4o",
+                messages=[{"role": "user", "content": "hello"}],
             )
 
         assert "MULTIROUTE_API_KEY is not set" in caplog.text
@@ -152,7 +163,8 @@ def test_litellm_completion_connection_error_fallback(mock_env):
         mock_completion.side_effect = [error, "conn_fallback_success"]
 
         response = completion(
-            model="gpt-4o", messages=[{"role": "user", "content": "hello"}]
+            model="gpt-4o",
+            messages=[{"role": "user", "content": "hello"}],
         )
 
         assert response == "conn_fallback_success"
@@ -195,7 +207,7 @@ def test_litellm_completion_resolve_model_prefixes_gpt(mock_env):
         mock_completion.assert_called_once()
         kwargs = mock_completion.call_args.kwargs
         assert kwargs["model"] == "gpt-4o"
-        assert kwargs["api_base"] == "https://api.multiroute.ai/v1"
+        assert kwargs["api_base"] == "https://api.multiroute.ai/openai/v1"
 
 
 def test_litellm_completion_unknown_model_unchanged(mock_env):
@@ -230,7 +242,8 @@ def test_litellm_completion_404_fallback(mock_env):
         mock_completion.side_effect = [error, "404_fallback_success"]
 
         response = completion(
-            model="gpt-4o", messages=[{"role": "user", "content": "hello"}]
+            model="gpt-4o",
+            messages=[{"role": "user", "content": "hello"}],
         )
 
         assert response == "404_fallback_success"
@@ -257,7 +270,8 @@ def test_litellm_completion_timeout_fallback(mock_env):
         mock_completion.side_effect = [error, "timeout_fallback_success"]
 
         response = completion(
-            model="gpt-4o", messages=[{"role": "user", "content": "hello"}]
+            model="gpt-4o",
+            messages=[{"role": "user", "content": "hello"}],
         )
 
         assert response == "timeout_fallback_success"
