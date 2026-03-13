@@ -1,6 +1,6 @@
 import json
-import os
 import logging
+import os
 import warnings
 from typing import Any, AsyncIterator, Dict, Iterator, Optional
 
@@ -11,9 +11,8 @@ from google.genai import types
 from google.genai._transformers import t_tools
 from google.genai.types import FinishReason, GenerateContentResponseUsageMetadata
 
+from multiroute.config import settings
 from multiroute.providers import resolve_model
-
-MULTIROUTE_BASE_URL = "https://api.multiroute.ai/openai/v1"
 
 
 def _is_multiroute_error(e: Exception) -> bool:
@@ -45,7 +44,7 @@ def _get_shared_openai_client() -> openai.OpenAI:
     global _shared_openai_client
     if _shared_openai_client is None:
         _shared_openai_client = openai.OpenAI(
-            base_url=MULTIROUTE_BASE_URL,
+            base_url=settings.base_url,
             api_key=os.environ.get("MULTIROUTE_API_KEY") or "dummy",
             max_retries=0,
         )
@@ -56,7 +55,7 @@ def _get_shared_async_openai_client() -> openai.AsyncOpenAI:
     global _shared_async_openai_client
     if _shared_async_openai_client is None:
         _shared_async_openai_client = openai.AsyncOpenAI(
-            base_url=MULTIROUTE_BASE_URL,
+            base_url=settings.base_url,
             api_key=os.environ.get("MULTIROUTE_API_KEY") or "dummy",
             max_retries=0,
         )

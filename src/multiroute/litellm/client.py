@@ -1,13 +1,14 @@
 import copy
-import os
 import logging
+import os
+
+from multiroute.config import settings
 
 try:
     import litellm
 except ImportError:
     litellm = None
 
-MULTIROUTE_BASE_URL = "https://api.multiroute.ai/v1"
 
 _MISSING_KEY_MESSAGE = (
     "MULTIROUTE_API_KEY is not set. Requests will go directly to the provider "
@@ -69,7 +70,7 @@ def completion(**kwargs):
         return litellm.completion(**kwargs)
 
     mr_kwargs = copy.copy(kwargs)
-    mr_kwargs["api_base"] = MULTIROUTE_BASE_URL
+    mr_kwargs["api_base"] = settings.base_url
     mr_kwargs["api_key"] = mr_api_key
     mr_kwargs["custom_llm_provider"] = "openai"
 
@@ -93,7 +94,7 @@ async def acompletion(**kwargs):
         return await litellm.acompletion(**kwargs)
 
     mr_kwargs = copy.copy(kwargs)
-    mr_kwargs["api_base"] = MULTIROUTE_BASE_URL
+    mr_kwargs["api_base"] = settings.base_url
     mr_kwargs["api_key"] = mr_api_key
     mr_kwargs["custom_llm_provider"] = "openai"
 

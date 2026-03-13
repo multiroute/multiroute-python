@@ -1,5 +1,5 @@
-import os
 import logging
+import os
 from typing import Any
 
 import openai
@@ -11,21 +11,18 @@ from openai.resources.chat.completions import (
 )
 from openai.resources.responses import AsyncResponses, Responses
 
+from multiroute.config import settings
 from multiroute.providers import resolve_model
-
-MULTIROUTE_BASE_URL = "https://api.multiroute.ai/openai/v1"
 
 
 def _is_multiroute_error(e: Exception) -> bool:
     if isinstance(e, openai.APIConnectionError):
         return True
-    if isinstance(e, openai.InternalServerError):  # 5xx errors
+    if isinstance(e, openai.InternalServerError):
         return True
     if isinstance(e, openai.APITimeoutError):
         return True
-    if isinstance(
-        e, openai.NotFoundError
-    ):  # 404 - useful if endpoint or model is missing on proxy
+    if isinstance(e, openai.NotFoundError):
         return True
     return False
 
@@ -37,7 +34,7 @@ class MultirouteChatCompletions(ChatCompletions):
 
         # Safely create a temporary client sharing the connection pool
         temp_client = self._client.with_options(
-            base_url=MULTIROUTE_BASE_URL, api_key=os.environ.get("MULTIROUTE_API_KEY")
+            base_url=settings.base_url, api_key=os.environ.get("MULTIROUTE_API_KEY")
         )
 
         try:
@@ -59,7 +56,7 @@ class AsyncMultirouteChatCompletions(AsyncChatCompletions):
             return await super().create(**kwargs)
 
         temp_client = self._client.with_options(
-            base_url=MULTIROUTE_BASE_URL, api_key=os.environ.get("MULTIROUTE_API_KEY")
+            base_url=settings.base_url, api_key=os.environ.get("MULTIROUTE_API_KEY")
         )
 
         try:
@@ -80,7 +77,7 @@ class MultirouteResponses(Responses):
             return super().create(**kwargs)
 
         temp_client = self._client.with_options(
-            base_url=MULTIROUTE_BASE_URL, api_key=os.environ.get("MULTIROUTE_API_KEY")
+            base_url=settings.base_url, api_key=os.environ.get("MULTIROUTE_API_KEY")
         )
 
         try:
@@ -101,7 +98,7 @@ class AsyncMultirouteResponses(AsyncResponses):
             return await super().create(**kwargs)
 
         temp_client = self._client.with_options(
-            base_url=MULTIROUTE_BASE_URL, api_key=os.environ.get("MULTIROUTE_API_KEY")
+            base_url=settings.base_url, api_key=os.environ.get("MULTIROUTE_API_KEY")
         )
 
         try:
