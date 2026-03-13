@@ -476,16 +476,37 @@ def _openai_stream_to_google_stream(
     openai_stream: Any, model: str
 ) -> Iterator[types.GenerateContentResponse]:
     """Translate an OpenAI Stream[ChatCompletionChunk] to Google GenerateContentResponse chunks."""
-    for chunk in openai_stream:
-        yield _openai_chunk_to_google_response(chunk, model)
+    try:
+        for chunk in openai_stream:
+            yield _openai_chunk_to_google_response(chunk, model)
+    finally:
+        close = getattr(openai_stream, "close", None)
+        if callable(close):
+            try:
+                close()
+            except Exception:
+                # Best-effort cleanup; ignore errors from closing the stream.
+                pass
 
 
 async def _openai_async_stream_to_google_stream(
     openai_stream: Any, model: str
 ) -> AsyncIterator[types.GenerateContentResponse]:
     """Translate an OpenAI AsyncStream[ChatCompletionChunk] to Google chunks."""
-    async for chunk in openai_stream:
-        yield _openai_chunk_to_google_response(chunk, model)
+    try:
+        async for chunk in openai_stream:
+            yield _openai_chunk_to_google_response(chunk, model)
+    finally:
+        aclose = getattr(openai_stream, "aclose", None)
+        close = getattr(openai_stream, "close", None) if aclose is None else None
+        try:
+            if callable(aclose):
+                await aclose()
+            elif callable(close):
+                close()
+        except Exception:
+            # Best-effort cleanup; ignore errors from closing the stream.
+            pass
 
 
 class MultirouteModels:
