@@ -1,7 +1,4 @@
-import pytest
-
-from multiroute.models import resolve_model, _load_url_registry
-
+from multiroute.providers import _load_providers, _extract_hostname, resolve_model
 
 # --- already-prefixed model passthrough ---
 
@@ -120,19 +117,27 @@ def test_model_casing_is_preserved():
     )
 
 
-# --- registry loading ---
+# --- registry loading and hostname extraction ---
 
 
-def test_url_registry_loads_once(monkeypatch):
-    """_load_url_registry is cached; calling it twice should return the same object."""
-    _load_url_registry.cache_clear()
-    first = _load_url_registry()
-    second = _load_url_registry()
+def test_providers_loads_once(monkeypatch):
+    """_load_providers is cached; calling it twice should return the same object."""
+    _load_providers.cache_clear()
+    first = _load_providers()
+    second = _load_providers()
     assert first is second
 
 
-def test_url_registry_sorted_longest_first():
-    """Longer URL patterns should appear before shorter ones."""
-    pairs = _load_url_registry()
-    lengths = [len(pattern) for pattern, _ in pairs]
-    assert lengths == sorted(lengths, reverse=True)
+def test_providers_is_dict():
+    """_load_providers returns a plain dict keyed by lowercase hostname."""
+    providers = _load_providers()
+    assert isinstance(providers, dict)
+    assert providers.get("api.openai.com") == "openai"
+    assert providers.get("api.groq.com") == "groq"
+
+
+def test_extract_hostname():
+    assert _extract_hostname("https://api.openai.com/v1/") == "api.openai.com"
+    assert _extract_hostname("https://api.groq.com/openai/v1") == "api.groq.com"
+    assert _extract_hostname("https://API.OPENAI.COM/v1/") == "api.openai.com"
+    assert _extract_hostname("not-a-url") is None

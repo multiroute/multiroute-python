@@ -1,71 +1,114 @@
 import os
+import asyncio
+
 from multiroute.google import Client
 from google.genai import types
 
-# 1. Set your API keys
-os.environ["MULTIROUTE_API_KEY"] = os.environ.get(
-    "MULTIROUTE_API_KEY", "your-multiroute-key"
-)
-os.environ["GEMINI_API_KEY"] = os.environ.get("GEMINI_API_KEY", "your-google-key")
-
-# 2. Initialize the wrapped client
-client = Client()
+# Set your API keys via environment variables before running:
+#   export GOOGLE_API_KEY="your-google-key"
+#   export MULTIROUTE_API_KEY="your-multiroute-key"  # optional — enables proxy routing
 
 
-# 3. Define a Python function to be used as a tool
+# Define a Python function to be used as a tool.
+# The Google SDK reads the function signature and docstring to build the tool schema.
 def get_weather(location: str) -> str:
     """Get the current weather in a given location.
 
     Args:
         location: The city and state, e.g., San Francisco, CA
     """
-    # This function body is what we'd execute if we were building the full loop.
-    # The model only sees the signature and docstring.
-    pass
+    # In a real application this would call a weather API.
+    # The model only sees the signature and docstring; this body runs locally.
+    return f"Sunny, 22°C in {location}"
 
 
-# 4. Generate content with the tool (First Turn)
-print("Sending request to Multiroute (Google format - First Turn)...")
-contents = ["What is the weather like in Boston?"]
-response = client.models.generate_content(
-    model="gemini-2.5-flash",
-    contents=contents,
-    config=types.GenerateContentConfig(tools=[get_weather], temperature=0.0),
-)
+def sync_tools_example():
+    print("--- Sync: Tool Use ---")
+    client = Client(api_key=os.environ.get("GOOGLE_API_KEY"))
 
-# 5. Handle the response and provide tool result (Second Turn)
-# Add assistant's tool call message to history
-contents.append(response.candidates[0].content)
+    contents = ["What is the weather like in Boston?"]
 
-if response.function_calls:
-    print("\nModel decided to call a tool:")
-    tool_responses = []
-    for func_call in response.function_calls:
-        print(f" - Function Name: {func_call.name}")
-        print(f" - Arguments: {func_call.args}")
+    # First turn — model decides to call the tool
+    print("First turn: sending request...")
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=contents,
+        config=types.GenerateContentConfig(tools=[get_weather], temperature=0.0),
+    )
+    contents.append(response.candidates[0].content)
 
-        # Simulate tool execution
-        tool_result = {"result": "Sunny, 22°C"}
-        print(f" - Simulated Result: {tool_result}")
+    if response.function_calls:
+        tool_responses = []
+        for func_call in response.function_calls:
+            print(f"  Tool call: {func_call.name}({func_call.args})")
 
-        # Add tool response to current turn
-        tool_responses.append(
-            types.Part(
-                function_response=types.FunctionResponse(
-                    name=func_call.name, response=tool_result
+            # Execute the function locally
+            tool_result = {"result": get_weather(**func_call.args)}
+            print(f"  Tool result: {tool_result}")
+
+            tool_responses.append(
+                types.Part(
+                    function_response=types.FunctionResponse(
+                        name=func_call.name, response=tool_result
+                    )
                 )
             )
+
+        contents.append(types.Content(role="user", parts=tool_responses))
+
+        # Second turn — model uses the tool result to form a final answer
+        print("Second turn: sending tool result...")
+        final_response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=contents,
         )
+        print(f"Final response: {final_response.text}")
+    else:
+        print(f"Model responded directly: {response.text}")
 
-    # Add new user message with tool results to history
-    contents.append(types.Content(role="user", parts=tool_responses))
 
-    # Get final response from model
-    print("\nSending tool result back to Multiroute (Second Turn)...")
-    final_response = client.models.generate_content(
-        model="gemini-2.5-flash",
+async def async_tools_example():
+    print("\n--- Async: Tool Use ---")
+    client = Client(api_key=os.environ.get("GOOGLE_API_KEY"))
+
+    contents = ["What is the weather like in London?"]
+
+    print("First turn: sending request...")
+    response = await client.aio.models.generate_content(
+        model="gemini-2.0-flash",
         contents=contents,
+        config=types.GenerateContentConfig(tools=[get_weather], temperature=0.0),
     )
-    print(f"\nFinal response: {final_response.text}")
-else:
-    print(f"\nModel responded directly: {response.text}")
+    contents.append(response.candidates[0].content)
+
+    if response.function_calls:
+        tool_responses = []
+        for func_call in response.function_calls:
+            print(f"  Tool call: {func_call.name}({func_call.args})")
+
+            tool_result = {"result": get_weather(**func_call.args)}
+            print(f"  Tool result: {tool_result}")
+
+            tool_responses.append(
+                types.Part(
+                    function_response=types.FunctionResponse(
+                        name=func_call.name, response=tool_result
+                    )
+                )
+            )
+
+        contents.append(types.Content(role="user", parts=tool_responses))
+
+        print("Second turn: sending tool result...")
+        final_response = await client.aio.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=contents,
+        )
+        print(f"Final response: {final_response.text}")
+    else:
+        print(f"Model responded directly: {response.text}")
+
+
+if __name__ == "__main__":
+    sync_tools_example()
+    asyncio.run(async_tools_example())

@@ -1,6 +1,8 @@
 import json
 import os
-from typing import Any, Dict, Optional
+import logging
+import warnings
+from typing import Any, AsyncIterator, Dict, Iterator, Optional
 
 import google.genai as genai
 import httpx
@@ -9,7 +11,7 @@ from google.genai import types
 from google.genai._transformers import t_tools
 from google.genai.types import FinishReason, GenerateContentResponseUsageMetadata
 
-from multiroute.models import resolve_model
+from multiroute.providers import resolve_model
 
 MULTIROUTE_BASE_URL = "https://api.multiroute.ai/openai/v1"
 
@@ -356,8 +358,13 @@ def _google_to_openai_request(
                                     )
                         if openai_tools:
                             openai_req["tools"] = openai_tools
-                    except Exception:
-                        pass  # Silently drop tools if conversion fails, let backend handle if possible
+                    except Exception as _tool_err:
+                        warnings.warn(
+                            f"multiroute: failed to convert Google tools to OpenAI format "
+                            f"({_tool_err!r}); tools will be omitted from the proxy request.",
+                            UserWarning,
+                            stacklevel=2,
+                        )
 
     return openai_req
 
@@ -420,10 +427,93 @@ def _openai_to_google_response(
     return response
 
 
+def _openai_chunk_to_google_response(
+    chunk: Any, model: str
+) -> types.GenerateContentResponse:
+    """Convert a single OpenAI ChatCompletionChunk to a Google GenerateContentResponse."""
+    parts = []
+    finish_reason = FinishReason.OTHER
+
+    if chunk.choices:
+        choice = chunk.choices[0]
+        delta = choice.delta
+
+        if delta and delta.content:
+            parts.append(types.Part(text=delta.content))
+
+        if choice.finish_reason:
+            fr = choice.finish_reason
+            if fr == "stop":
+                finish_reason = FinishReason.STOP
+            elif fr == "length":
+                finish_reason = FinishReason.MAX_TOKENS
+            else:
+                finish_reason = FinishReason.STOP
+
+    candidate = types.Candidate(
+        content=types.Content(role="model", parts=parts),
+        finish_reason=finish_reason,
+    )
+
+    usage_data = {}
+    if hasattr(chunk, "usage") and chunk.usage:
+        usage_data = (
+            chunk.usage.model_dump() if hasattr(chunk.usage, "model_dump") else {}
+        )
+
+    return types.GenerateContentResponse(
+        candidates=[candidate],
+        usage_metadata=GenerateContentResponseUsageMetadata(
+            prompt_token_count=usage_data.get("prompt_tokens", 0),
+            candidates_token_count=usage_data.get("completion_tokens", 0),
+            total_token_count=usage_data.get("total_tokens", 0),
+        ),
+        model_version=model,
+    )
+
+
+def _openai_stream_to_google_stream(
+    openai_stream: Any, model: str
+) -> Iterator[types.GenerateContentResponse]:
+    """Translate an OpenAI Stream[ChatCompletionChunk] to Google GenerateContentResponse chunks."""
+    try:
+        for chunk in openai_stream:
+            yield _openai_chunk_to_google_response(chunk, model)
+    finally:
+        close = getattr(openai_stream, "close", None)
+        if callable(close):
+            try:
+                close()
+            except Exception:
+                # Best-effort cleanup; ignore errors from closing the stream.
+                pass
+
+
+async def _openai_async_stream_to_google_stream(
+    openai_stream: Any, model: str
+) -> AsyncIterator[types.GenerateContentResponse]:
+    """Translate an OpenAI AsyncStream[ChatCompletionChunk] to Google chunks."""
+    try:
+        async for chunk in openai_stream:
+            yield _openai_chunk_to_google_response(chunk, model)
+    finally:
+        aclose = getattr(openai_stream, "aclose", None)
+        close = getattr(openai_stream, "close", None) if aclose is None else None
+        try:
+            if callable(aclose):
+                await aclose()
+            elif callable(close):
+                close()
+        except Exception:
+            # Best-effort cleanup; ignore errors from closing the stream.
+            pass
+
+
 class MultirouteModels:
-    def __init__(self, client: genai.Client, original_method):
+    def __init__(self, client: genai.Client, original_method, original_stream_method):
         self._client = client
         self._original_generate_content = original_method
+        self._original_generate_content_stream = original_stream_method
 
     def generate_content(
         self, model: str, contents: Any, config: Any = None, **kwargs
@@ -453,11 +543,39 @@ class MultirouteModels:
                 )
             raise
 
+    def generate_content_stream(
+        self, model: str, contents: Any, config: Any = None, **kwargs
+    ) -> Iterator[types.GenerateContentResponse]:
+        if not os.environ.get("MULTIROUTE_API_KEY"):
+            return self._original_generate_content_stream(
+                model=model, contents=contents, config=config, **kwargs
+            )
+
+        try:
+            openai_req = _google_to_openai_request(
+                model, contents, config, self._client
+            )
+            openai_req["stream"] = True
+
+            client = _get_shared_openai_client().with_options(
+                api_key=os.environ.get("MULTIROUTE_API_KEY"),
+                timeout=kwargs.get("timeout", 60),
+            )
+            openai_stream = client.chat.completions.create(**openai_req)
+            return _openai_stream_to_google_stream(openai_stream, model)
+        except Exception as e:
+            if _is_multiroute_error(e):
+                return self._original_generate_content_stream(
+                    model=model, contents=contents, config=config, **kwargs
+                )
+            raise
+
 
 class AsyncMultirouteModels:
-    def __init__(self, client: genai.Client, original_method):
+    def __init__(self, client: genai.Client, original_method, original_stream_method):
         self._client = client
         self._original_generate_content = original_method
+        self._original_generate_content_stream = original_stream_method
 
     async def generate_content(
         self, model: str, contents: Any, config: Any = None, **kwargs
@@ -487,18 +605,62 @@ class AsyncMultirouteModels:
                 )
             raise
 
+    async def generate_content_stream(
+        self, model: str, contents: Any, config: Any = None, **kwargs
+    ) -> AsyncIterator[types.GenerateContentResponse]:
+        if not os.environ.get("MULTIROUTE_API_KEY"):
+            return await self._original_generate_content_stream(
+                model=model, contents=contents, config=config, **kwargs
+            )
+
+        try:
+            openai_req = _google_to_openai_request(
+                model, contents, config, self._client
+            )
+            openai_req["stream"] = True
+
+            client = _get_shared_async_openai_client().with_options(
+                api_key=os.environ.get("MULTIROUTE_API_KEY"),
+                timeout=kwargs.get("timeout", 60),
+            )
+            openai_stream = await client.chat.completions.create(**openai_req)
+            return _openai_async_stream_to_google_stream(openai_stream, model)
+        except Exception as e:
+            if _is_multiroute_error(e):
+                return await self._original_generate_content_stream(
+                    model=model, contents=contents, config=config, **kwargs
+                )
+            raise
+
 
 class Client(genai.Client):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        if not os.environ.get("MULTIROUTE_API_KEY"):
+            logging.error(
+                "MULTIROUTE_API_KEY is not set. Requests will go directly to Google "
+                "without Multiroute high-availability routing."
+            )
         # Save original methods and override
-        self._multiroute_models = MultirouteModels(self, self.models.generate_content)
+        self._multiroute_models = MultirouteModels(
+            self,
+            self.models.generate_content,
+            self.models.generate_content_stream,
+        )
         self.models.generate_content = self._multiroute_models.generate_content
+        self.models.generate_content_stream = (
+            self._multiroute_models.generate_content_stream
+        )
 
         if hasattr(self, "aio") and hasattr(self.aio, "models"):
             self._async_multiroute_models = AsyncMultirouteModels(
-                self, self.aio.models.generate_content
+                self,
+                self.aio.models.generate_content,
+                self.aio.models.generate_content_stream,
             )
             self.aio.models.generate_content = (
                 self._async_multiroute_models.generate_content
+            )
+            self.aio.models.generate_content_stream = (
+                self._async_multiroute_models.generate_content_stream
             )

@@ -32,6 +32,7 @@ For Anthropic or Google support, install the corresponding extra:
 ```bash
 pip install multiroute[anthropic]   # Anthropic client
 pip install multiroute[google]      # Google client
+pip install multiroute[litellm]     # LiteLLM client
 pip install multiroute[all]         # All providers
 ```
 
@@ -41,6 +42,7 @@ Or with `uv`:
 uv add multiroute
 uv add "multiroute[anthropic]"   # optional: Anthropic
 uv add "multiroute[google]"      # optional: Google
+uv add "multiroute[litellm]"     # optional: LiteLLM
 uv add "multiroute[all]"         # optional: all providers
 ```
 
@@ -110,12 +112,39 @@ response = client.messages.create(
 from multiroute.google import Client as GoogleClient
 
 client = GoogleClient()
-model = client.models.generate_content
 
-response = model(
-    model="gemini-1.5-pro",
+response = client.models.generate_content(
+    model="gemini-2.0-flash",
     contents="Hello from multiroute + Google!",
 )
+```
+
+#### LiteLLM
+
+```python
+from multiroute.litellm import completion
+
+response = completion(
+    model="gpt-4o-mini",
+    messages=[{"role": "user", "content": "Hello from multiroute + LiteLLM!"}],
+)
+
+print(response.choices[0].message.content)
+```
+
+#### OpenAI Responses API
+
+```python
+from multiroute.openai import OpenAI
+
+client = OpenAI()
+
+response = client.responses.create(
+    model="gpt-4o",
+    input="Hello from multiroute Responses API!",
+)
+
+print(response.output[0].content[0].text)
 ```
 
 ### When to use multiroute

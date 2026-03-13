@@ -3,9 +3,16 @@ import pytest
 import respx
 import httpx
 import openai
-from unittest.mock import AsyncMock, patch
+from httpx._content import AsyncIteratorByteStream, IteratorByteStream
+from unittest.mock import AsyncMock, MagicMock, patch
 from multiroute.google import Client
 from google.genai import types
+
+
+async def aiter_bytes(chunks: list):
+    """Async generator that yields byte chunks — for use with AsyncIteratorByteStream."""
+    for chunk in chunks:
+        yield chunk
 
 
 @pytest.fixture
@@ -532,3 +539,297 @@ def test_finish_reason_length_maps_to_max_tokens(client):
     )
 
     assert response.candidates[0].finish_reason == types.FinishReason.MAX_TOKENS
+
+
+# ---------------------------------------------------------------------------
+# Streaming tests
+# ---------------------------------------------------------------------------
+
+_GOOGLE_SSE_BODY = (
+    b'data: {"id":"chatcmpl-s1","object":"chat.completion.chunk","model":"gemini-2.0-flash",'
+    b'"choices":[{"index":0,"delta":{"role":"assistant","content":"Hello"},"finish_reason":null}]}\n\n'
+    b'data: {"id":"chatcmpl-s1","object":"chat.completion.chunk","model":"gemini-2.0-flash",'
+    b'"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\n'
+    b"data: [DONE]\n\n"
+)
+
+
+@respx.mock
+def test_generate_content_stream_success(client):
+    """generate_content_stream routes through the proxy and yields Google response chunks."""
+    multiroute_route = respx.post(
+        "https://api.multiroute.ai/openai/v1/chat/completions"
+    ).mock(
+        return_value=httpx.Response(
+            200,
+            stream=IteratorByteStream([_GOOGLE_SSE_BODY]),
+            headers={"Content-Type": "text/event-stream"},
+        )
+    )
+
+    google_route = respx.post(
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent"
+    ).mock(return_value=httpx.Response(200, json={}))
+
+    chunks = list(
+        client.models.generate_content_stream(
+            model="gemini-2.0-flash", contents="Hello!"
+        )
+    )
+
+    assert multiroute_route.called
+    assert not google_route.called
+
+    req_json = json.loads(multiroute_route.calls.last.request.content)
+    assert req_json["stream"] is True
+
+    # Should yield at least one chunk with text content
+    text_chunks = [c for c in chunks if c.candidates and c.candidates[0].content.parts]
+    assert len(text_chunks) >= 1
+    assert text_chunks[0].candidates[0].content.parts[0].text == "Hello"
+
+
+@respx.mock
+def test_generate_content_stream_fallback_500(client):
+    """generate_content_stream falls back to native Google when proxy returns 500."""
+    multiroute_route = respx.post(
+        "https://api.multiroute.ai/openai/v1/chat/completions"
+    ).mock(return_value=httpx.Response(500, json={"error": "proxy failed"}))
+
+    # Native Google fallback: return a simple iterator
+    native_chunks = [
+        types.GenerateContentResponse(
+            candidates=[
+                types.Candidate(
+                    content=types.Content(
+                        role="model", parts=[types.Part(text="Native stream!")]
+                    ),
+                    finish_reason=types.FinishReason.STOP,
+                )
+            ]
+        )
+    ]
+
+    with patch.object(
+        client._multiroute_models,
+        "_original_generate_content_stream",
+        return_value=iter(native_chunks),
+    ) as mock_native:
+        chunks = list(
+            client.models.generate_content_stream(
+                model="gemini-2.0-flash", contents="Hello!"
+            )
+        )
+
+    assert multiroute_route.called
+    mock_native.assert_called_once()
+    assert len(chunks) == 1
+    assert chunks[0].candidates[0].content.parts[0].text == "Native stream!"
+
+
+@respx.mock
+def test_generate_content_stream_fallback_connection_error(client):
+    """generate_content_stream falls back to native Google on proxy connection error."""
+    multiroute_route = respx.post(
+        "https://api.multiroute.ai/openai/v1/chat/completions"
+    ).mock(side_effect=httpx.ConnectError("Connection refused"))
+
+    native_chunks = [
+        types.GenerateContentResponse(
+            candidates=[
+                types.Candidate(
+                    content=types.Content(
+                        role="model",
+                        parts=[types.Part(text="Fallback after connect error!")],
+                    ),
+                    finish_reason=types.FinishReason.STOP,
+                )
+            ]
+        )
+    ]
+
+    with patch.object(
+        client._multiroute_models,
+        "_original_generate_content_stream",
+        return_value=iter(native_chunks),
+    ) as mock_native:
+        chunks = list(
+            client.models.generate_content_stream(
+                model="gemini-2.0-flash", contents="Hello!"
+            )
+        )
+
+    assert multiroute_route.called
+    mock_native.assert_called_once()
+    assert (
+        chunks[0].candidates[0].content.parts[0].text == "Fallback after connect error!"
+    )
+
+
+@respx.mock
+async def test_async_generate_content_stream_success(client):
+    """aio.models.generate_content_stream routes through the proxy and yields chunks."""
+    multiroute_route = respx.post(
+        "https://api.multiroute.ai/openai/v1/chat/completions"
+    ).mock(
+        return_value=httpx.Response(
+            200,
+            stream=AsyncIteratorByteStream(aiter_bytes([_GOOGLE_SSE_BODY])),
+            headers={"Content-Type": "text/event-stream"},
+        )
+    )
+
+    google_route = respx.post(
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent"
+    ).mock(return_value=httpx.Response(200, json={}))
+
+    stream = await client.aio.models.generate_content_stream(
+        model="gemini-2.0-flash", contents="Hello!"
+    )
+
+    chunks = []
+    async for chunk in stream:
+        chunks.append(chunk)
+
+    assert multiroute_route.called
+    assert not google_route.called
+
+    req_json = json.loads(multiroute_route.calls.last.request.content)
+    assert req_json["stream"] is True
+
+    text_chunks = [c for c in chunks if c.candidates and c.candidates[0].content.parts]
+    assert len(text_chunks) >= 1
+    assert text_chunks[0].candidates[0].content.parts[0].text == "Hello"
+
+
+@respx.mock
+async def test_async_generate_content_stream_fallback_500(client):
+    """aio.models.generate_content_stream falls back to native Google on proxy 500."""
+    multiroute_route = respx.post(
+        "https://api.multiroute.ai/openai/v1/chat/completions"
+    ).mock(return_value=httpx.Response(500, json={"error": "proxy failed"}))
+
+    async def native_async_gen():
+        yield types.GenerateContentResponse(
+            candidates=[
+                types.Candidate(
+                    content=types.Content(
+                        role="model",
+                        parts=[types.Part(text="Async native stream!")],
+                    ),
+                    finish_reason=types.FinishReason.STOP,
+                )
+            ]
+        )
+
+    with patch.object(
+        client._async_multiroute_models,
+        "_original_generate_content_stream",
+        new=AsyncMock(return_value=native_async_gen()),
+    ) as mock_native:
+        stream = await client.aio.models.generate_content_stream(
+            model="gemini-2.0-flash", contents="Hello!"
+        )
+        chunks = []
+        async for chunk in stream:
+            chunks.append(chunk)
+
+    assert multiroute_route.called
+    mock_native.assert_called_once()
+    assert len(chunks) == 1
+    assert chunks[0].candidates[0].content.parts[0].text == "Async native stream!"
+
+
+def test_no_multiroute_key_warns(monkeypatch, caplog):
+    monkeypatch.delenv("MULTIROUTE_API_KEY", raising=False)
+    import logging
+
+    with caplog.at_level(logging.ERROR):
+        Client(api_key="test-google-key")
+    assert "MULTIROUTE_API_KEY is not set" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# 404 fallback
+# ---------------------------------------------------------------------------
+
+
+@respx.mock
+def test_generate_content_fallback_404(client):
+    """A 404 from the proxy should trigger fallback to native Google."""
+    multiroute_route = respx.post(
+        "https://api.multiroute.ai/openai/v1/chat/completions"
+    ).mock(return_value=httpx.Response(404, json={"detail": "Not Found"}))
+
+    google_route = respx.post(
+        url__regex=r"https://generativelanguage.googleapis.com/.*"
+    ).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "candidates": [
+                    {
+                        "content": {
+                            "role": "model",
+                            "parts": [{"text": "404 Google Fallback!"}],
+                        },
+                        "finishReason": "STOP",
+                    }
+                ],
+                "usageMetadata": {
+                    "promptTokenCount": 3,
+                    "candidatesTokenCount": 3,
+                    "totalTokenCount": 6,
+                },
+            },
+        )
+    )
+
+    response = client.models.generate_content(model="gemini-2.0-flash", contents="Hi")
+
+    assert response.text == "404 Google Fallback!"
+    assert multiroute_route.called
+    assert google_route.called
+
+
+# ---------------------------------------------------------------------------
+# Timeout fallback
+# ---------------------------------------------------------------------------
+
+
+@respx.mock
+def test_generate_content_fallback_timeout(client):
+    """An httpx.TimeoutException from the proxy should trigger fallback to native Google."""
+    multiroute_route = respx.post(
+        "https://api.multiroute.ai/openai/v1/chat/completions"
+    ).mock(side_effect=httpx.TimeoutException("timed out"))
+
+    google_route = respx.post(
+        url__regex=r"https://generativelanguage.googleapis.com/.*"
+    ).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "candidates": [
+                    {
+                        "content": {
+                            "role": "model",
+                            "parts": [{"text": "Timeout Google Fallback!"}],
+                        },
+                        "finishReason": "STOP",
+                    }
+                ],
+                "usageMetadata": {
+                    "promptTokenCount": 3,
+                    "candidatesTokenCount": 3,
+                    "totalTokenCount": 6,
+                },
+            },
+        )
+    )
+
+    response = client.models.generate_content(model="gemini-2.0-flash", contents="Hi")
+
+    assert response.text == "Timeout Google Fallback!"
+    assert multiroute_route.called
+    assert google_route.called

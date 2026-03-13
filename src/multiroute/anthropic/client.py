@@ -2,15 +2,29 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any, Dict
+import logging
+from typing import Any, AsyncIterator, Dict, Iterator, Union
 
 import anthropic
 import httpx
 import openai
 from anthropic.resources.messages import AsyncMessages, Messages
-from anthropic.types import Message
+from anthropic.types import (
+    Message,
+    MessageDeltaUsage,
+    RawContentBlockDeltaEvent,
+    RawContentBlockStartEvent,
+    RawContentBlockStopEvent,
+    RawMessageDeltaEvent,
+    RawMessageStartEvent,
+    RawMessageStopEvent,
+    TextBlock,
+    TextDelta,
+    Usage,
+)
+from anthropic.types.raw_message_delta_event import Delta
 
-from multiroute.models import resolve_model
+from multiroute.providers import resolve_model
 
 MULTIROUTE_BASE_URL = "https://api.multiroute.ai/openai/v1"
 
@@ -318,10 +332,221 @@ def _openai_to_anthropic_response(openai_resp: Dict[str, Any]) -> Message:
     return Message.construct(**msg_dict)
 
 
+RawMessageStreamEvent = Union[
+    RawMessageStartEvent,
+    RawContentBlockStartEvent,
+    RawContentBlockDeltaEvent,
+    RawContentBlockStopEvent,
+    RawMessageDeltaEvent,
+    RawMessageStopEvent,
+]
+
+
+def _openai_stream_to_anthropic_events(
+    openai_stream: Any, model: str, message_id: str, input_tokens: int
+) -> Iterator[RawMessageStreamEvent]:
+    """Translate an OpenAI Stream[ChatCompletionChunk] to Anthropic raw stream events."""
+    # Emit message_start
+    yield RawMessageStartEvent(
+        type="message_start",
+        message=Message.construct(
+            id=message_id,
+            type="message",
+            role="assistant",
+            content=[],
+            model=model,
+            stop_reason=None,
+            stop_sequence=None,
+            usage=Usage(input_tokens=input_tokens, output_tokens=0),
+        ),
+    )
+    # Emit content_block_start for text block 0
+    yield RawContentBlockStartEvent(
+        type="content_block_start",
+        index=0,
+        content_block=TextBlock(type="text", text=""),
+    )
+
+    finish_reason = None
+    output_tokens = 0
+
+    for chunk in openai_stream:
+        if not chunk.choices:
+            # Usage-only chunk (some providers send this at the end)
+            if hasattr(chunk, "usage") and chunk.usage:
+                output_tokens = chunk.usage.completion_tokens or 0
+            continue
+
+        choice = chunk.choices[0]
+        delta = choice.delta
+
+        if delta and delta.content:
+            yield RawContentBlockDeltaEvent(
+                type="content_block_delta",
+                index=0,
+                delta=TextDelta(type="text_delta", text=delta.content),
+            )
+
+        if choice.finish_reason:
+            finish_reason = choice.finish_reason
+
+        # Capture per-chunk usage if present
+        if hasattr(chunk, "usage") and chunk.usage:
+            output_tokens = chunk.usage.completion_tokens or output_tokens
+
+    # Map finish_reason to Anthropic stop_reason
+    stop_reason: str
+    if finish_reason == "length":
+        stop_reason = "max_tokens"
+    elif finish_reason == "tool_calls":
+        stop_reason = "tool_use"
+    else:
+        stop_reason = "end_turn"
+
+    yield RawContentBlockStopEvent(type="content_block_stop", index=0)
+    yield RawMessageDeltaEvent(
+        type="message_delta",
+        delta=Delta(stop_reason=stop_reason, stop_sequence=None),
+        usage=MessageDeltaUsage(output_tokens=output_tokens),
+    )
+    yield RawMessageStopEvent(type="message_stop")
+
+
+async def _openai_async_stream_to_anthropic_events(
+    openai_stream: Any, model: str, message_id: str, input_tokens: int
+) -> AsyncIterator[RawMessageStreamEvent]:
+    """Translate an OpenAI AsyncStream[ChatCompletionChunk] to Anthropic raw stream events."""
+    yield RawMessageStartEvent(
+        type="message_start",
+        message=Message.construct(
+            id=message_id,
+            type="message",
+            role="assistant",
+            content=[],
+            model=model,
+            stop_reason=None,
+            stop_sequence=None,
+            usage=Usage(input_tokens=input_tokens, output_tokens=0),
+        ),
+    )
+    yield RawContentBlockStartEvent(
+        type="content_block_start",
+        index=0,
+        content_block=TextBlock(type="text", text=""),
+    )
+
+    finish_reason = None
+    output_tokens = 0
+
+    async for chunk in openai_stream:
+        if not chunk.choices:
+            if hasattr(chunk, "usage") and chunk.usage:
+                output_tokens = chunk.usage.completion_tokens or 0
+            continue
+
+        choice = chunk.choices[0]
+        delta = choice.delta
+
+        if delta and delta.content:
+            yield RawContentBlockDeltaEvent(
+                type="content_block_delta",
+                index=0,
+                delta=TextDelta(type="text_delta", text=delta.content),
+            )
+
+        if choice.finish_reason:
+            finish_reason = choice.finish_reason
+
+        if hasattr(chunk, "usage") and chunk.usage:
+            output_tokens = chunk.usage.completion_tokens or output_tokens
+
+    stop_reason: str
+    if finish_reason == "length":
+        stop_reason = "max_tokens"
+    elif finish_reason == "tool_calls":
+        stop_reason = "tool_use"
+    else:
+        stop_reason = "end_turn"
+
+    yield RawContentBlockStopEvent(type="content_block_stop", index=0)
+    yield RawMessageDeltaEvent(
+        type="message_delta",
+        delta=Delta(stop_reason=stop_reason, stop_sequence=None),
+        usage=MessageDeltaUsage(output_tokens=output_tokens),
+    )
+    yield RawMessageStopEvent(type="message_stop")
+
+
+class _SyncAnthropicStream:
+    """Wraps an OpenAI Stream[ChatCompletionChunk] and yields Anthropic RawMessageStreamEvents."""
+
+    def __init__(
+        self,
+        openai_stream: Any,
+        model: str,
+        message_id: str = "multiroute-stream",
+        input_tokens: int = 0,
+    ) -> None:
+        self._openai_stream = openai_stream
+        self._iterator = _openai_stream_to_anthropic_events(
+            openai_stream, model, message_id, input_tokens
+        )
+
+    def __iter__(self) -> Iterator[RawMessageStreamEvent]:
+        return self._iterator
+
+    def __next__(self) -> RawMessageStreamEvent:
+        return next(self._iterator)
+
+    def __enter__(self) -> "_SyncAnthropicStream":
+        return self
+
+    def __exit__(self, *args: Any) -> None:
+        self.close()
+
+    def close(self) -> None:
+        if hasattr(self._openai_stream, "close"):
+            self._openai_stream.close()
+
+
+class _AsyncAnthropicStream:
+    """Wraps an OpenAI AsyncStream[ChatCompletionChunk] and yields Anthropic events."""
+
+    def __init__(
+        self,
+        openai_stream: Any,
+        model: str,
+        message_id: str = "multiroute-stream",
+        input_tokens: int = 0,
+    ) -> None:
+        self._openai_stream = openai_stream
+        self._iterator = _openai_async_stream_to_anthropic_events(
+            openai_stream, model, message_id, input_tokens
+        )
+
+    def __aiter__(self) -> AsyncIterator[RawMessageStreamEvent]:
+        return self._iterator
+
+    async def __anext__(self) -> RawMessageStreamEvent:
+        return await self._iterator.__anext__()
+
+    async def __aenter__(self) -> "_AsyncAnthropicStream":
+        return self
+
+    async def __aexit__(self, *args: Any) -> None:
+        await self.aclose()
+
+    async def aclose(self) -> None:
+        if hasattr(self._openai_stream, "aclose"):
+            await self._openai_stream.aclose()
+
+
 class MultirouteMessages(Messages):
-    def create(self, **kwargs) -> Message:
+    def create(self, **kwargs) -> Any:
         if not os.environ.get("MULTIROUTE_API_KEY"):
             return super().create(**kwargs)
+
+        stream = kwargs.get("stream", False)
 
         try:
             openai_req = _anthropic_to_openai_request(
@@ -332,10 +557,18 @@ class MultirouteMessages(Messages):
                 api_key=os.environ.get("MULTIROUTE_API_KEY"),
                 timeout=self._client.timeout,
             )
-            openai_resp_obj = client.chat.completions.create(**openai_req)
 
-            openai_resp = openai_resp_obj.model_dump()
-            return _openai_to_anthropic_response(openai_resp)
+            if stream:
+                openai_req["stream"] = True
+                openai_stream = client.chat.completions.create(**openai_req)
+                return _SyncAnthropicStream(
+                    openai_stream,
+                    model=kwargs.get("model", ""),
+                )
+            else:
+                openai_resp_obj = client.chat.completions.create(**openai_req)
+                openai_resp = openai_resp_obj.model_dump()
+                return _openai_to_anthropic_response(openai_resp)
         except Exception as e:
             if _is_multiroute_error(e):
                 # Fallback to the real anthropic create using original parameters
@@ -344,9 +577,11 @@ class MultirouteMessages(Messages):
 
 
 class AsyncMultirouteMessages(AsyncMessages):
-    async def create(self, **kwargs) -> Message:
+    async def create(self, **kwargs) -> Any:
         if not os.environ.get("MULTIROUTE_API_KEY"):
             return await super().create(**kwargs)
+
+        stream = kwargs.get("stream", False)
 
         try:
             openai_req = _anthropic_to_openai_request(
@@ -357,10 +592,18 @@ class AsyncMultirouteMessages(AsyncMessages):
                 api_key=os.environ.get("MULTIROUTE_API_KEY"),
                 timeout=self._client.timeout,
             )
-            openai_resp_obj = await client.chat.completions.create(**openai_req)
 
-            openai_resp = openai_resp_obj.model_dump()
-            return _openai_to_anthropic_response(openai_resp)
+            if stream:
+                openai_req["stream"] = True
+                openai_stream = await client.chat.completions.create(**openai_req)
+                return _AsyncAnthropicStream(
+                    openai_stream,
+                    model=kwargs.get("model", ""),
+                )
+            else:
+                openai_resp_obj = await client.chat.completions.create(**openai_req)
+                openai_resp = openai_resp_obj.model_dump()
+                return _openai_to_anthropic_response(openai_resp)
         except Exception as e:
             if _is_multiroute_error(e):
                 return await super().create(**kwargs)
@@ -370,10 +613,20 @@ class AsyncMultirouteMessages(AsyncMessages):
 class Anthropic(anthropic.Anthropic):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        if not os.environ.get("MULTIROUTE_API_KEY"):
+            logging.error(
+                "MULTIROUTE_API_KEY is not set. Requests will go directly to Anthropic "
+                "without Multiroute high-availability routing."
+            )
         self.messages = MultirouteMessages(self)
 
 
 class AsyncAnthropic(anthropic.AsyncAnthropic):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        if not os.environ.get("MULTIROUTE_API_KEY"):
+            logging.error(
+                "MULTIROUTE_API_KEY is not set. Requests will go directly to Anthropic "
+                "without Multiroute high-availability routing."
+            )
         self.messages = AsyncMultirouteMessages(self)
