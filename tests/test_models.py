@@ -1,4 +1,4 @@
-from multiroute.providers import _load_providers, _extract_hostname, resolve_model
+from multiroute.providers import _extract_hostname, _load_providers, resolve_model
 
 # --- already-prefixed model passthrough ---
 

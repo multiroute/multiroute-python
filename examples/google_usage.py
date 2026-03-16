@@ -1,5 +1,5 @@
-import os
 import asyncio
+import os
 
 from multiroute.google import Client as GoogleClient
 
@@ -14,7 +14,7 @@ def sync_example():
 
     try:
         response = client.models.generate_content(
-            model="gemini-2.0-flash", contents="Say hello in a creative way!"
+            model="gemini-2.0-flash", contents="Say hello in a creative way!",
         )
         print(f"Response: {response.text}")
         print(f"Usage: {response.usage_metadata}")
@@ -47,7 +47,7 @@ async def async_example():
 
     try:
         response = await client.aio.models.generate_content(
-            model="gemini-2.0-flash", contents="What is the capital of France?"
+            model="gemini-2.0-flash", contents="What is the capital of France?",
         )
         print(f"Response: {response.text}")
         print(f"Usage: {response.usage_metadata}")

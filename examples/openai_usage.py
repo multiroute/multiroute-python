@@ -31,7 +31,7 @@ def sync_streaming_example():
         with client.chat.completions.stream(
             model="gpt-4o-mini",
             messages=[
-                {"role": "user", "content": "Count to five, one number per line."}
+                {"role": "user", "content": "Count to five, one number per line."},
             ],
         ) as stream:
             for text in stream.text_stream:
@@ -75,7 +75,7 @@ async def async_streaming_example():
         stream = await client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "user", "content": "Count to three, one number per line."}
+                {"role": "user", "content": "Count to three, one number per line."},
             ],
             stream=True,
         )

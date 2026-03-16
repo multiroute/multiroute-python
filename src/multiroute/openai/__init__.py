@@ -1,3 +1,3 @@
-from .client import OpenAI, AsyncOpenAI
+from .client import AsyncOpenAI, OpenAI
 
-__all__ = ["OpenAI", "AsyncOpenAI"]
+__all__ = ["AsyncOpenAI", "OpenAI"]

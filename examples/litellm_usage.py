@@ -1,12 +1,10 @@
 import asyncio
 import json
-import os
 
 # Set the providers' keys so litellm can fall back to the actual model if proxy fails:
 #   export OPENAI_API_KEY="your-openai-key"
 #   export ANTHROPIC_API_KEY="your-anthropic-key"
 #   export MULTIROUTE_API_KEY="your-multiroute-key"  # optional — enables proxy routing
-
 # Drop-in replacement for `from litellm import completion, acompletion`
 from multiroute.litellm import acompletion, completion
 
@@ -29,7 +27,7 @@ tools = [
                 "required": ["location"],
             },
         },
-    }
+    },
 ]
 
 
@@ -61,7 +59,7 @@ def sync_streaming_example():
         stream = completion(
             model="gpt-4o-mini",
             messages=[
-                {"role": "user", "content": "Count to three, one number per line."}
+                {"role": "user", "content": "Count to three, one number per line."},
             ],
             stream=True,
         )
@@ -107,7 +105,7 @@ async def async_tools_example():
                             "role": "tool",
                             "name": function_name,
                             "content": json.dumps(result),
-                        }
+                        },
                     )
 
             # Second turn — model uses the tool result to form a final answer

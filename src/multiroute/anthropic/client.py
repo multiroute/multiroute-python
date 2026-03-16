@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import json
-import os
 import logging
-from typing import Any, AsyncIterator, Dict, Iterator, Union
+from collections.abc import AsyncIterator, Iterator
+from typing import Any, Union
 
 import anthropic
 import httpx
@@ -24,16 +24,16 @@ from anthropic.types import (
 )
 from anthropic.types.raw_message_delta_event import Delta
 
+from multiroute.config import get_api_key, settings
 from multiroute.providers import resolve_model
-
-MULTIROUTE_BASE_URL = "https://api.multiroute.ai/openai/v1"
 
 
 def _is_multiroute_error(e: Exception) -> bool:
     if isinstance(e, (anthropic.APIConnectionError, openai.APIConnectionError)):
         return True
     if isinstance(
-        e, (anthropic.InternalServerError, openai.InternalServerError)
+        e,
+        (anthropic.InternalServerError, openai.InternalServerError),
     ):  # 5xx errors
         return True
     if isinstance(e, (anthropic.APITimeoutError, openai.APITimeoutError)):
@@ -57,8 +57,8 @@ def _get_shared_openai_client() -> openai.OpenAI:
     global _shared_openai_client
     if _shared_openai_client is None:
         _shared_openai_client = openai.OpenAI(
-            base_url=MULTIROUTE_BASE_URL,
-            api_key=os.environ.get("MULTIROUTE_API_KEY") or "dummy",
+            base_url=settings.base_url,
+            api_key=get_api_key(),
             max_retries=0,
         )
     return _shared_openai_client
@@ -68,16 +68,17 @@ def _get_shared_async_openai_client() -> openai.AsyncOpenAI:
     global _shared_async_openai_client
     if _shared_async_openai_client is None:
         _shared_async_openai_client = openai.AsyncOpenAI(
-            base_url=MULTIROUTE_BASE_URL,
-            api_key=os.environ.get("MULTIROUTE_API_KEY") or "dummy",
+            base_url=settings.base_url,
+            api_key=get_api_key(),
             max_retries=0,
         )
     return _shared_async_openai_client
 
 
 def _anthropic_to_openai_request(
-    kwargs: Dict[str, Any], base_url: str | None = None
-) -> Dict[str, Any]:
+    kwargs: dict[str, Any],
+    base_url: str | None = None,
+) -> dict[str, Any]:
     """Convert Anthropic messages request parameters to OpenAI chat/completions format."""
     openai_req = {}
     model = kwargs["model"]
@@ -88,7 +89,7 @@ def _anthropic_to_openai_request(
 
     # System prompt -> role: system
     messages = []
-    if "system" in kwargs and kwargs["system"]:
+    if kwargs.get("system"):
         # system could be string or list of text blocks
         sys_content = kwargs["system"]
         if isinstance(sys_content, list):
@@ -144,7 +145,7 @@ def _anthropic_to_openai_request(
                             {
                                 "type": "image_url",
                                 "image_url": {"url": f"data:{b_mime};base64,{b_data}"},
-                            }
+                            },
                         )
                     elif b_type == "tool_use":
                         # Assistant turn with tool call
@@ -171,7 +172,7 @@ def _anthropic_to_openai_request(
                                     "name": b_name,
                                     "arguments": json.dumps(b_input),
                                 },
-                            }
+                            },
                         )
                     elif b_type == "tool_result":
                         # Tool result back to model
@@ -190,7 +191,7 @@ def _anthropic_to_openai_request(
                                 "role": "tool",
                                 "tool_call_id": b_id,
                                 "content": str(b_content),
-                            }
+                            },
                         )
                         continue  # Skip appending to current role's content
 
@@ -243,7 +244,7 @@ def _anthropic_to_openai_request(
                         "description": tool.get("description", ""),
                         "parameters": tool.get("input_schema", {}),
                     },
-                }
+                },
             )
         openai_req["tools"] = openai_tools
 
@@ -271,7 +272,7 @@ def _anthropic_to_openai_request(
     return openai_req
 
 
-def _openai_to_anthropic_response(openai_resp: Dict[str, Any]) -> Message:
+def _openai_to_anthropic_response(openai_resp: dict[str, Any]) -> Message:
     """Convert OpenAI chat/completions response to Anthropic Message type."""
     choice = openai_resp.get("choices", [{}])[0]
     message_data = choice.get("message", {})
@@ -308,7 +309,7 @@ def _openai_to_anthropic_response(openai_resp: Dict[str, Any]) -> Message:
                     "id": tc.get("id", ""),
                     "name": tc["function"]["name"],
                     "input": args,
-                }
+                },
             )
 
     # Usage
@@ -343,7 +344,10 @@ RawMessageStreamEvent = Union[
 
 
 def _openai_stream_to_anthropic_events(
-    openai_stream: Any, model: str, message_id: str, input_tokens: int
+    openai_stream: Any,
+    model: str,
+    message_id: str,
+    input_tokens: int,
 ) -> Iterator[RawMessageStreamEvent]:
     """Translate an OpenAI Stream[ChatCompletionChunk] to Anthropic raw stream events."""
     # Emit message_start
@@ -413,7 +417,10 @@ def _openai_stream_to_anthropic_events(
 
 
 async def _openai_async_stream_to_anthropic_events(
-    openai_stream: Any, model: str, message_id: str, input_tokens: int
+    openai_stream: Any,
+    model: str,
+    message_id: str,
+    input_tokens: int,
 ) -> AsyncIterator[RawMessageStreamEvent]:
     """Translate an OpenAI AsyncStream[ChatCompletionChunk] to Anthropic raw stream events."""
     yield RawMessageStartEvent(
@@ -489,7 +496,10 @@ class _SyncAnthropicStream:
     ) -> None:
         self._openai_stream = openai_stream
         self._iterator = _openai_stream_to_anthropic_events(
-            openai_stream, model, message_id, input_tokens
+            openai_stream,
+            model,
+            message_id,
+            input_tokens,
         )
 
     def __iter__(self) -> Iterator[RawMessageStreamEvent]:
@@ -498,10 +508,10 @@ class _SyncAnthropicStream:
     def __next__(self) -> RawMessageStreamEvent:
         return next(self._iterator)
 
-    def __enter__(self) -> "_SyncAnthropicStream":
+    def __enter__(self) -> _SyncAnthropicStream:
         return self
 
-    def __exit__(self, *args: Any) -> None:
+    def __exit__(self, *args: object) -> None:
         self.close()
 
     def close(self) -> None:
@@ -521,7 +531,10 @@ class _AsyncAnthropicStream:
     ) -> None:
         self._openai_stream = openai_stream
         self._iterator = _openai_async_stream_to_anthropic_events(
-            openai_stream, model, message_id, input_tokens
+            openai_stream,
+            model,
+            message_id,
+            input_tokens,
         )
 
     def __aiter__(self) -> AsyncIterator[RawMessageStreamEvent]:
@@ -530,10 +543,10 @@ class _AsyncAnthropicStream:
     async def __anext__(self) -> RawMessageStreamEvent:
         return await self._iterator.__anext__()
 
-    async def __aenter__(self) -> "_AsyncAnthropicStream":
+    async def __aenter__(self) -> _AsyncAnthropicStream:
         return self
 
-    async def __aexit__(self, *args: Any) -> None:
+    async def __aexit__(self, *args: object) -> None:
         await self.aclose()
 
     async def aclose(self) -> None:
@@ -543,18 +556,24 @@ class _AsyncAnthropicStream:
 
 class MultirouteMessages(Messages):
     def create(self, **kwargs) -> Any:
-        if not os.environ.get("MULTIROUTE_API_KEY"):
+        mr_api_key = kwargs.pop("multiroute_api_key", None)
+        if mr_api_key is None:
+            mr_api_key = get_api_key()
+
+        if not mr_api_key:
             return super().create(**kwargs)
 
         stream = kwargs.get("stream", False)
 
         try:
             openai_req = _anthropic_to_openai_request(
-                kwargs, str(self._client.base_url)
+                kwargs,
+                str(self._client.base_url),
             )
 
             client = _get_shared_openai_client().with_options(
-                api_key=os.environ.get("MULTIROUTE_API_KEY"),
+                base_url=settings.base_url,
+                api_key=mr_api_key,
                 timeout=self._client.timeout,
             )
 
@@ -565,10 +584,9 @@ class MultirouteMessages(Messages):
                     openai_stream,
                     model=kwargs.get("model", ""),
                 )
-            else:
-                openai_resp_obj = client.chat.completions.create(**openai_req)
-                openai_resp = openai_resp_obj.model_dump()
-                return _openai_to_anthropic_response(openai_resp)
+            openai_resp_obj = client.chat.completions.create(**openai_req)
+            openai_resp = openai_resp_obj.model_dump()
+            return _openai_to_anthropic_response(openai_resp)
         except Exception as e:
             if _is_multiroute_error(e):
                 # Fallback to the real anthropic create using original parameters
@@ -578,18 +596,24 @@ class MultirouteMessages(Messages):
 
 class AsyncMultirouteMessages(AsyncMessages):
     async def create(self, **kwargs) -> Any:
-        if not os.environ.get("MULTIROUTE_API_KEY"):
+        mr_api_key = kwargs.pop("multiroute_api_key", None)
+        if mr_api_key is None:
+            mr_api_key = get_api_key()
+
+        if not mr_api_key:
             return await super().create(**kwargs)
 
         stream = kwargs.get("stream", False)
 
         try:
             openai_req = _anthropic_to_openai_request(
-                kwargs, str(self._client.base_url)
+                kwargs,
+                str(self._client.base_url),
             )
 
             client = _get_shared_async_openai_client().with_options(
-                api_key=os.environ.get("MULTIROUTE_API_KEY"),
+                base_url=settings.base_url,
+                api_key=mr_api_key,
                 timeout=self._client.timeout,
             )
 
@@ -600,10 +624,9 @@ class AsyncMultirouteMessages(AsyncMessages):
                     openai_stream,
                     model=kwargs.get("model", ""),
                 )
-            else:
-                openai_resp_obj = await client.chat.completions.create(**openai_req)
-                openai_resp = openai_resp_obj.model_dump()
-                return _openai_to_anthropic_response(openai_resp)
+            openai_resp_obj = await client.chat.completions.create(**openai_req)
+            openai_resp = openai_resp_obj.model_dump()
+            return _openai_to_anthropic_response(openai_resp)
         except Exception as e:
             if _is_multiroute_error(e):
                 return await super().create(**kwargs)
@@ -612,21 +635,27 @@ class AsyncMultirouteMessages(AsyncMessages):
 
 class Anthropic(anthropic.Anthropic):
     def __init__(self, *args, **kwargs):
+        self.multiroute_api_key = (
+            kwargs.pop("multiroute_api_key", None) or get_api_key()
+        )
         super().__init__(*args, **kwargs)
-        if not os.environ.get("MULTIROUTE_API_KEY"):
+        if not self.multiroute_api_key:
             logging.error(
                 "MULTIROUTE_API_KEY is not set. Requests will go directly to Anthropic "
-                "without Multiroute high-availability routing."
+                "without Multiroute high-availability routing.",
             )
         self.messages = MultirouteMessages(self)
 
 
 class AsyncAnthropic(anthropic.AsyncAnthropic):
     def __init__(self, *args, **kwargs):
+        self.multiroute_api_key = (
+            kwargs.pop("multiroute_api_key", None) or get_api_key()
+        )
         super().__init__(*args, **kwargs)
-        if not os.environ.get("MULTIROUTE_API_KEY"):
+        if not self.multiroute_api_key:
             logging.error(
                 "MULTIROUTE_API_KEY is not set. Requests will go directly to Anthropic "
-                "without Multiroute high-availability routing."
+                "without Multiroute high-availability routing.",
             )
         self.messages = AsyncMultirouteMessages(self)

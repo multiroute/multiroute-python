@@ -26,7 +26,7 @@ tools = [
                 "required": ["location"],
             },
         },
-    }
+    },
 ]
 
 
@@ -51,7 +51,7 @@ def sync_tools_example():
     if message.tool_calls:
         for tool_call in message.tool_calls:
             print(
-                f"  Tool call: {tool_call.function.name}({tool_call.function.arguments})"
+                f"  Tool call: {tool_call.function.name}({tool_call.function.arguments})",
             )
 
             # Simulate tool execution
@@ -64,7 +64,7 @@ def sync_tools_example():
                     "tool_call_id": tool_call.id,
                     "name": tool_call.function.name,
                     "content": tool_result,
-                }
+                },
             )
 
         # Second turn — model uses the tool result to form a final answer
@@ -109,7 +109,7 @@ async def async_tools_example():
                     "tool_call_id": tool_call.id,
                     "name": tool_call.function.name,
                     "content": tool_result,
-                }
+                },
             )
 
         print("Second turn: sending tool result...")

@@ -1,5 +1,4 @@
-"""
-Model resolver: maps a bare model name to a provider-prefixed name
+"""Model resolver: maps a bare model name to a provider-prefixed name
 (e.g. "gpt-4o" -> "openai/gpt-4o") by extracting the hostname from the
 client's base_url and looking it up in the bundled providers.yaml registry.
 
@@ -63,6 +62,7 @@ def resolve_model(model: str, base_url: Optional[str] = None) -> str:
     'gpt-4o'
     >>> resolve_model("gpt-4o", "https://unknown-proxy.example.com")  # no match → unchanged
     'gpt-4o'
+
     """
     if not model or "/" in model:
         return model
@@ -76,8 +76,6 @@ def resolve_model(model: str, base_url: Optional[str] = None) -> str:
 
     providers = _load_providers()
 
-    # Exact match first, then suffix match to handle wildcard subdomains
-    # (e.g. "my-resource.openai.azure.com" matches the "openai.azure.com" entry).
     provider = providers.get(hostname)
     if provider is None:
         for domain, p in providers.items():
