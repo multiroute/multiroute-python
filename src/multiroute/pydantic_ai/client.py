@@ -18,11 +18,11 @@ try:
     from pydantic_ai.models.openai import OpenAIChatModel
     from pydantic_ai.providers.openai import OpenAIProvider
     from pydantic_ai.settings import ModelSettings
-except ImportError:
+except ImportError as e:
     raise ImportError(
         "pydantic-ai is not installed. "
         "Install it with: pip install 'multiroute[pydantic-ai]'",
-    )
+    ) from e
 
 
 def _is_pydantic_ai_multiroute_error(e: Exception) -> bool:
