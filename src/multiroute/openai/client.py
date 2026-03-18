@@ -2,8 +2,7 @@ import logging
 from typing import Any
 
 import openai
-from openai.resources.chat.completions import \
-    AsyncCompletions as AsyncChatCompletions
+from openai.resources.chat.completions import AsyncCompletions as AsyncChatCompletions
 from openai.resources.chat.completions import Completions as ChatCompletions
 from openai.resources.responses import AsyncResponses, Responses
 

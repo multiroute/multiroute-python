@@ -9,8 +9,7 @@ import openai
 from google import genai
 from google.genai import types
 from google.genai._transformers import t_tools
-from google.genai.types import (FinishReason,
-                                GenerateContentResponseUsageMetadata)
+from google.genai.types import FinishReason, GenerateContentResponseUsageMetadata
 
 from multiroute.config import get_api_key, get_multiroute_base_url
 from multiroute.providers import resolve_model

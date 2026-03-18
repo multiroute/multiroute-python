@@ -9,12 +9,19 @@ import anthropic
 import httpx
 import openai
 from anthropic.resources.messages import AsyncMessages, Messages
-from anthropic.types import (Message, MessageDeltaUsage,
-                             RawContentBlockDeltaEvent,
-                             RawContentBlockStartEvent,
-                             RawContentBlockStopEvent, RawMessageDeltaEvent,
-                             RawMessageStartEvent, RawMessageStopEvent,
-                             TextBlock, TextDelta, Usage)
+from anthropic.types import (
+    Message,
+    MessageDeltaUsage,
+    RawContentBlockDeltaEvent,
+    RawContentBlockStartEvent,
+    RawContentBlockStopEvent,
+    RawMessageDeltaEvent,
+    RawMessageStartEvent,
+    RawMessageStopEvent,
+    TextBlock,
+    TextDelta,
+    Usage,
+)
 from anthropic.types.raw_message_delta_event import Delta
 
 from multiroute.config import get_api_key, get_multiroute_base_url
