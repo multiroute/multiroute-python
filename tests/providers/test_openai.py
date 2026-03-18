@@ -58,7 +58,8 @@ def test_chat_completions_success(client):
     )
 
     response = client.chat.completions.create(
-        model="gpt-4o-mini", messages=[{"role": "user", "content": "Hello!"}],
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": "Hello!"}],
     )
 
     assert response.choices[0].message.content == "Hello there!"
@@ -76,7 +77,8 @@ def test_chat_completions_fallback_500(client):
         "https://api.multiroute.ai/openai/v1/chat/completions",
     ).mock(
         return_value=httpx.Response(
-            500, json={"error": {"message": "Internal Server Error"}},
+            500,
+            json={"error": {"message": "Internal Server Error"}},
         ),
     )
 
@@ -110,7 +112,8 @@ def test_chat_completions_fallback_500(client):
     )
 
     response = client.chat.completions.create(
-        model="gpt-4o-mini", messages=[{"role": "user", "content": "Hello!"}],
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": "Hello!"}],
     )
 
     assert response.choices[0].message.content == "Fallback response!"
@@ -154,7 +157,8 @@ def test_chat_completions_fallback_connection_error(client):
     )
 
     response = client.chat.completions.create(
-        model="gpt-4o-mini", messages=[{"role": "user", "content": "Hello!"}],
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": "Hello!"}],
     )
 
     assert (
@@ -171,7 +175,8 @@ async def test_async_chat_completions_fallback_500(async_client):
         "https://api.multiroute.ai/openai/v1/chat/completions",
     ).mock(
         return_value=httpx.Response(
-            500, json={"error": {"message": "Internal Server Error"}},
+            500,
+            json={"error": {"message": "Internal Server Error"}},
         ),
     )
 
@@ -205,7 +210,8 @@ async def test_async_chat_completions_fallback_500(async_client):
     )
 
     response = await async_client.chat.completions.create(
-        model="gpt-4o-mini", messages=[{"role": "user", "content": "Hello!"}],
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": "Hello!"}],
     )
 
     assert response.choices[0].message.content == "Async Fallback response!"
@@ -234,7 +240,8 @@ def test_chat_completions_fallback_404(client):
     )
 
     response = client.chat.completions.create(
-        model="gpt-4o-mini", messages=[{"role": "user", "content": "Hello!"}],
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": "Hello!"}],
     )
 
     assert response.choices[0].message.content == "404 Fallback!"
@@ -266,7 +273,8 @@ def test_chat_completions_no_multiroute_key(client, monkeypatch):
     )
 
     response = client.chat.completions.create(
-        model="gpt-4o-mini", messages=[{"role": "user", "content": "Hello!"}],
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": "Hello!"}],
     )
 
     assert response.choices[0].message.content == "Direct OpenAI!"
@@ -382,7 +390,8 @@ async def test_async_chat_completions_no_multiroute_key(async_client, monkeypatc
     )
 
     response = await async_client.chat.completions.create(
-        model="gpt-4o", messages=[{"role": "user", "content": "Hi"}],
+        model="gpt-4o",
+        messages=[{"role": "user", "content": "Hi"}],
     )
 
     assert response.choices[0].message.content == "Async Direct!"
@@ -417,7 +426,8 @@ def test_chat_completions_fallback_timeout(client):
     )
 
     response = client.chat.completions.create(
-        model="gpt-4o", messages=[{"role": "user", "content": "Hi"}],
+        model="gpt-4o",
+        messages=[{"role": "user", "content": "Hi"}],
     )
 
     assert response.choices[0].message.content == "Timeout Fallback!"
@@ -442,7 +452,8 @@ def test_chat_completions_non_multiroute_error_reraised(client):
 
     with pytest.raises(openai.BadRequestError):
         client.chat.completions.create(
-            model="gpt-4o", messages=[{"role": "user", "content": "Hi"}],
+            model="gpt-4o",
+            messages=[{"role": "user", "content": "Hi"}],
         )
 
 
@@ -496,7 +507,8 @@ def test_responses_fallback_500(client):
     """Responses API falls back to native OpenAI on proxy 500."""
     respx.post("https://api.multiroute.ai/openai/v1/responses").mock(
         return_value=httpx.Response(
-            500, json={"error": {"message": "Internal Server Error"}},
+            500,
+            json={"error": {"message": "Internal Server Error"}},
         ),
     )
 
@@ -558,7 +570,8 @@ async def test_async_responses_fallback_500(async_client):
     """AsyncOpenAI Responses API falls back on proxy 500."""
     respx.post("https://api.multiroute.ai/openai/v1/responses").mock(
         return_value=httpx.Response(
-            500, json={"error": {"message": "Internal Server Error"}},
+            500,
+            json={"error": {"message": "Internal Server Error"}},
         ),
     )
 

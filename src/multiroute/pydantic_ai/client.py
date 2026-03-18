@@ -6,7 +6,7 @@ from typing import Any
 
 import openai
 
-from multiroute.config import get_api_key, settings
+from multiroute.config import get_api_key, get_multiroute_base_url
 from multiroute.openai.client import _is_multiroute_error
 from multiroute.providers import resolve_model
 
@@ -42,7 +42,7 @@ class MultirouteOpenAIProvider(OpenAIProvider):
         multiroute_api_key: str | None = None,
     ) -> None:
         self._client = openai.AsyncOpenAI(
-            base_url=settings.base_url,
+            base_url=get_multiroute_base_url(),
             api_key=multiroute_api_key,
         )
 

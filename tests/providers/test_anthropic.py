@@ -7,7 +7,7 @@ import respx
 from httpx._content import AsyncIteratorByteStream, IteratorByteStream
 
 from multiroute.anthropic import Anthropic, AsyncAnthropic
-from multiroute.config import settings
+from multiroute.config import get_multiroute_base_url
 
 
 async def aiter_bytes(chunks: list):
@@ -33,7 +33,9 @@ def setup_env(monkeypatch):
 
 @respx.mock
 def test_messages_success(client):
-    multiroute_route = respx.post(f"{settings.base_url}/chat/completions").mock(
+    multiroute_route = respx.post(
+        f"{get_multiroute_base_url()}/chat/completions",
+    ).mock(
         return_value=httpx.Response(
             200,
             json={
@@ -97,7 +99,9 @@ def import_json(content):
 
 @respx.mock
 def test_messages_fallback_500(client):
-    multiroute_route = respx.post(f"{settings.base_url}/chat/completions").mock(
+    multiroute_route = respx.post(
+        f"{get_multiroute_base_url()}/chat/completions",
+    ).mock(
         return_value=httpx.Response(
             500,
             json={"error": {"message": "Internal Server Error"}},
@@ -133,7 +137,9 @@ def test_messages_fallback_500(client):
 
 @respx.mock
 def test_messages_fallback_connection_error(client):
-    multiroute_route = respx.post(f"{settings.base_url}/chat/completions").mock(
+    multiroute_route = respx.post(
+        f"{get_multiroute_base_url()}/chat/completions",
+    ).mock(
         side_effect=httpx.ConnectError("Connection refused"),
     )
 
@@ -171,7 +177,9 @@ def test_messages_fallback_connection_error(client):
 
 @respx.mock
 async def test_async_messages_fallback_500(async_client):
-    multiroute_route = respx.post(f"{settings.base_url}/chat/completions").mock(
+    multiroute_route = respx.post(
+        f"{get_multiroute_base_url()}/chat/completions",
+    ).mock(
         return_value=httpx.Response(
             500,
             json={"error": {"message": "Internal Server Error"}},
@@ -208,7 +216,9 @@ async def test_async_messages_fallback_500(async_client):
 @respx.mock
 def test_tools_request_translation(client):
     """Tools in Anthropic format should be translated to OpenAI format in the proxy request."""
-    multiroute_route = respx.post(f"{settings.base_url}/chat/completions").mock(
+    multiroute_route = respx.post(
+        f"{get_multiroute_base_url()}/chat/completions",
+    ).mock(
         return_value=httpx.Response(
             200,
             json={
@@ -291,7 +301,9 @@ def test_tools_request_translation(client):
 @respx.mock
 def test_tool_choice_translation(client):
     """tool_choice variants should be translated correctly to OpenAI format."""
-    multiroute_route = respx.post(f"{settings.base_url}/chat/completions").mock(
+    multiroute_route = respx.post(
+        f"{get_multiroute_base_url()}/chat/completions",
+    ).mock(
         return_value=httpx.Response(
             200,
             json={
@@ -372,7 +384,9 @@ def test_tool_choice_translation(client):
 @respx.mock
 def test_tool_result_message_translation(client):
     """tool_result content blocks in user messages should become OpenAI tool-role messages."""
-    multiroute_route = respx.post(f"{settings.base_url}/chat/completions").mock(
+    multiroute_route = respx.post(
+        f"{get_multiroute_base_url()}/chat/completions",
+    ).mock(
         return_value=httpx.Response(
             200,
             json={
@@ -446,7 +460,9 @@ def test_tool_result_message_translation(client):
 def test_messages_no_multiroute_key(client, monkeypatch):
     monkeypatch.delenv("MULTIROUTE_API_KEY", raising=False)
 
-    multiroute_route = respx.post(f"{settings.base_url}/chat/completions").mock(
+    multiroute_route = respx.post(
+        f"{get_multiroute_base_url()}/chat/completions",
+    ).mock(
         return_value=httpx.Response(200, json={}),
     )
 
@@ -480,7 +496,9 @@ def test_messages_no_multiroute_key(client, monkeypatch):
 @respx.mock
 def test_mixed_text_and_tool_use_translation(client):
     """A message with both text and tool_use should preserve both when translating to OpenAI."""
-    multiroute_route = respx.post(f"{settings.base_url}/chat/completions").mock(
+    multiroute_route = respx.post(
+        f"{get_multiroute_base_url()}/chat/completions",
+    ).mock(
         return_value=httpx.Response(
             200,
             json={
@@ -546,7 +564,9 @@ async def test_async_messages_no_multiroute_key(async_client, monkeypatch):
     """AsyncAnthropic calls native Anthropic directly when no key is set."""
     monkeypatch.delenv("MULTIROUTE_API_KEY", raising=False)
 
-    multiroute_route = respx.post(f"{settings.base_url}/chat/completions").mock(
+    multiroute_route = respx.post(
+        f"{get_multiroute_base_url()}/chat/completions",
+    ).mock(
         return_value=httpx.Response(200, json={}),
     )
 
@@ -573,7 +593,9 @@ async def test_async_messages_no_multiroute_key(async_client, monkeypatch):
 @respx.mock
 async def test_async_messages_fallback_connection_error(async_client):
     """AsyncAnthropic falls back to native when proxy raises a connection error."""
-    multiroute_route = respx.post(f"{settings.base_url}/chat/completions").mock(
+    multiroute_route = respx.post(
+        f"{get_multiroute_base_url()}/chat/completions",
+    ).mock(
         side_effect=httpx.ConnectError("Connection refused"),
     )
 
@@ -614,7 +636,9 @@ async def test_async_messages_fallback_connection_error(async_client):
 @respx.mock
 def test_system_prompt_translation(client):
     """A 'system' kwarg should appear as a system-role message in the proxy request."""
-    multiroute_route = respx.post(f"{settings.base_url}/chat/completions").mock(
+    multiroute_route = respx.post(
+        f"{get_multiroute_base_url()}/chat/completions",
+    ).mock(
         return_value=httpx.Response(
             200,
             json={
@@ -653,7 +677,9 @@ def test_system_prompt_translation(client):
 @respx.mock
 def test_list_system_prompt_translation(client):
     """A list-style 'system' kwarg (text blocks) should be joined into a single string."""
-    multiroute_route = respx.post(f"{settings.base_url}/chat/completions").mock(
+    multiroute_route = respx.post(
+        f"{get_multiroute_base_url()}/chat/completions",
+    ).mock(
         return_value=httpx.Response(
             200,
             json={
@@ -700,7 +726,9 @@ def test_list_system_prompt_translation(client):
 @respx.mock
 def test_sampling_params_translation(client):
     """temperature, top_p, and stop_sequences are forwarded to the proxy request."""
-    multiroute_route = respx.post(f"{settings.base_url}/chat/completions").mock(
+    multiroute_route = respx.post(
+        f"{get_multiroute_base_url()}/chat/completions",
+    ).mock(
         return_value=httpx.Response(
             200,
             json={
@@ -744,7 +772,9 @@ def test_sampling_params_translation(client):
 @respx.mock
 def test_finish_reason_length_maps_to_max_tokens(client):
     """finish_reason='length' from OpenAI should map to stop_reason='max_tokens' in Anthropic."""
-    respx.post(f"{settings.base_url}/chat/completions").mock(
+    respx.post(
+        f"{get_multiroute_base_url()}/chat/completions",
+    ).mock(
         return_value=httpx.Response(
             200,
             json={
@@ -781,7 +811,9 @@ def test_finish_reason_length_maps_to_max_tokens(client):
 @respx.mock
 def test_messages_non_multiroute_error_reraised(client):
     """A 401 authentication error from the proxy should be re-raised, not swallowed."""
-    respx.post(f"{settings.base_url}/chat/completions").mock(
+    respx.post(
+        f"{get_multiroute_base_url()}/chat/completions",
+    ).mock(
         return_value=httpx.Response(
             401,
             json={
@@ -843,7 +875,9 @@ _NATIVE_ANTHROPIC_SSE_BODY = (
 @respx.mock
 def test_messages_stream_success(client):
     """stream=True routes through the proxy and translates OpenAI SSE to Anthropic events."""
-    multiroute_route = respx.post(f"{settings.base_url}/chat/completions").mock(
+    multiroute_route = respx.post(
+        f"{get_multiroute_base_url()}/chat/completions",
+    ).mock(
         return_value=httpx.Response(
             200,
             stream=IteratorByteStream([_ANTHROPIC_SSE_BODY]),
@@ -893,7 +927,9 @@ def test_messages_stream_success(client):
 @respx.mock
 def test_messages_stream_fallback_500(client):
     """stream=True falls back to native Anthropic when the proxy returns 500."""
-    multiroute_route = respx.post(f"{settings.base_url}/chat/completions").mock(
+    multiroute_route = respx.post(
+        f"{get_multiroute_base_url()}/chat/completions",
+    ).mock(
         return_value=httpx.Response(
             500,
             json={"error": {"message": "Internal Server Error"}},
@@ -926,7 +962,9 @@ def test_messages_stream_fallback_500(client):
 @respx.mock
 def test_messages_stream_fallback_connection_error(client):
     """stream=True falls back to native Anthropic when the proxy raises a connection error."""
-    multiroute_route = respx.post(f"{settings.base_url}/chat/completions").mock(
+    multiroute_route = respx.post(
+        f"{get_multiroute_base_url()}/chat/completions",
+    ).mock(
         side_effect=httpx.ConnectError("Connection refused"),
     )
 
@@ -954,7 +992,9 @@ def test_messages_stream_fallback_connection_error(client):
 @respx.mock
 async def test_async_messages_stream_success(async_client):
     """Async stream=True routes through the proxy and translates OpenAI SSE to Anthropic events."""
-    multiroute_route = respx.post(f"{settings.base_url}/chat/completions").mock(
+    multiroute_route = respx.post(
+        f"{get_multiroute_base_url()}/chat/completions",
+    ).mock(
         return_value=httpx.Response(
             200,
             stream=AsyncIteratorByteStream(aiter_bytes([_ANTHROPIC_SSE_BODY])),
@@ -995,7 +1035,9 @@ async def test_async_messages_stream_success(async_client):
 @respx.mock
 async def test_async_messages_stream_fallback_500(async_client):
     """Async stream=True falls back to native Anthropic when proxy returns 500."""
-    multiroute_route = respx.post(f"{settings.base_url}/chat/completions").mock(
+    multiroute_route = respx.post(
+        f"{get_multiroute_base_url()}/chat/completions",
+    ).mock(
         return_value=httpx.Response(
             500,
             json={"error": {"message": "Internal Server Error"}},
@@ -1052,7 +1094,9 @@ def test_async_no_multiroute_key_warns(monkeypatch, caplog):
 @respx.mock
 def test_messages_fallback_404(client):
     """A 404 from the proxy should trigger fallback to native Anthropic."""
-    multiroute_route = respx.post(f"{settings.base_url}/chat/completions").mock(
+    multiroute_route = respx.post(
+        f"{get_multiroute_base_url()}/chat/completions",
+    ).mock(
         return_value=httpx.Response(404, json={"detail": "Not Found"}),
     )
 
@@ -1091,7 +1135,9 @@ def test_messages_fallback_404(client):
 @respx.mock
 def test_messages_fallback_timeout(client):
     """An httpx.TimeoutException from the proxy should trigger fallback to native Anthropic."""
-    multiroute_route = respx.post(f"{settings.base_url}/chat/completions").mock(
+    multiroute_route = respx.post(
+        f"{get_multiroute_base_url()}/chat/completions",
+    ).mock(
         side_effect=httpx.TimeoutException("timed out"),
     )
 
@@ -1130,7 +1176,9 @@ def test_messages_fallback_timeout(client):
 @respx.mock
 async def test_async_messages_non_multiroute_error_reraised(async_client):
     """A 401 from the proxy in async mode should be re-raised, not swallowed."""
-    respx.post(f"{settings.base_url}/chat/completions").mock(
+    respx.post(
+        f"{get_multiroute_base_url()}/chat/completions",
+    ).mock(
         return_value=httpx.Response(
             401,
             json={

@@ -6,4 +6,6 @@
 - LiteLLM:  from multiroute.litellm import completion, acompletion
 """
 
-__all__: list[str] = []
+import logging
+
+logging.getLogger(__name__).addHandler(logging.NullHandler())

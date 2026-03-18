@@ -9,10 +9,13 @@ import openai
 from google import genai
 from google.genai import types
 from google.genai._transformers import t_tools
-from google.genai.types import FinishReason, GenerateContentResponseUsageMetadata
+from google.genai.types import (FinishReason,
+                                GenerateContentResponseUsageMetadata)
 
-from multiroute.config import get_api_key, settings
+from multiroute.config import get_api_key, get_multiroute_base_url
 from multiroute.providers import resolve_model
+
+logger = logging.getLogger(__name__)
 
 
 def _is_multiroute_error(e: Exception) -> bool:
@@ -44,7 +47,7 @@ def _get_shared_openai_client() -> openai.OpenAI:
     global _shared_openai_client
     if _shared_openai_client is None:
         _shared_openai_client = openai.OpenAI(
-            base_url=settings.base_url,
+            base_url=get_multiroute_base_url(),
             api_key=get_api_key(),
             max_retries=0,
         )
@@ -55,7 +58,7 @@ def _get_shared_async_openai_client() -> openai.AsyncOpenAI:
     global _shared_async_openai_client
     if _shared_async_openai_client is None:
         _shared_async_openai_client = openai.AsyncOpenAI(
-            base_url=settings.base_url,
+            base_url=get_multiroute_base_url(),
             api_key=get_api_key(),
             max_retries=0,
         )
@@ -550,7 +553,7 @@ class MultirouteModels:
             )
 
             client = _get_shared_openai_client().with_options(
-                base_url=settings.base_url,
+                base_url=get_multiroute_base_url(),
                 api_key=mr_api_key,
                 timeout=kwargs.get("timeout", 60),
             )
@@ -597,7 +600,7 @@ class MultirouteModels:
             openai_req["stream"] = True
 
             client = _get_shared_openai_client().with_options(
-                base_url=settings.base_url,
+                base_url=get_multiroute_base_url(),
                 api_key=mr_api_key,
                 timeout=kwargs.get("timeout", 60),
             )
@@ -648,7 +651,7 @@ class AsyncMultirouteModels:
             )
 
             client = _get_shared_async_openai_client().with_options(
-                base_url=settings.base_url,
+                base_url=get_multiroute_base_url(),
                 api_key=mr_api_key,
                 timeout=kwargs.get("timeout", 60),
             )
@@ -695,7 +698,7 @@ class AsyncMultirouteModels:
             openai_req["stream"] = True
 
             client = _get_shared_async_openai_client().with_options(
-                base_url=settings.base_url,
+                base_url=get_multiroute_base_url(),
                 api_key=mr_api_key,
                 timeout=kwargs.get("timeout", 60),
             )
@@ -719,7 +722,7 @@ class Client(genai.Client):
         )
         super().__init__(*args, **kwargs)
         if not self.multiroute_api_key:
-            logging.error(
+            logger.error(
                 "MULTIROUTE_API_KEY is not set. Requests will go directly to Google "
                 "without Multiroute high-availability routing.",
             )

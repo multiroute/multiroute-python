@@ -51,7 +51,8 @@ def sync_tools_example():
             tool_responses.append(
                 types.Part(
                     function_response=types.FunctionResponse(
-                        name=func_call.name, response=tool_result,
+                        name=func_call.name,
+                        response=tool_result,
                     ),
                 ),
             )
@@ -94,7 +95,8 @@ async def async_tools_example():
             tool_responses.append(
                 types.Part(
                     function_response=types.FunctionResponse(
-                        name=func_call.name, response=tool_result,
+                        name=func_call.name,
+                        response=tool_result,
                     ),
                 ),
             )

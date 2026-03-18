@@ -1,13 +1,12 @@
 [project]
 name = "multiroute"
-version = "0.1.7"
+version = "0.1.8"
 description = "Official multiroute.ai SDK client with client-side failover for OpenAI, Anthropic, Google and other LLMs."
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
     "openai>=2.26.0",
     "pyyaml>=6.0",
-    "pydantic-settings>=2.0.0",
 ]
 
 [project.optional-dependencies]
@@ -40,6 +39,7 @@ dev = [
     "pytest>=8.4.2",
     "pytest-asyncio>=1.2.0",
     "ruff>=0.15.6",
+    "black>=25.11.0"
 ]
 
 [tool.uv.workspace]

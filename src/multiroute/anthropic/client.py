@@ -9,23 +9,18 @@ import anthropic
 import httpx
 import openai
 from anthropic.resources.messages import AsyncMessages, Messages
-from anthropic.types import (
-    Message,
-    MessageDeltaUsage,
-    RawContentBlockDeltaEvent,
-    RawContentBlockStartEvent,
-    RawContentBlockStopEvent,
-    RawMessageDeltaEvent,
-    RawMessageStartEvent,
-    RawMessageStopEvent,
-    TextBlock,
-    TextDelta,
-    Usage,
-)
+from anthropic.types import (Message, MessageDeltaUsage,
+                             RawContentBlockDeltaEvent,
+                             RawContentBlockStartEvent,
+                             RawContentBlockStopEvent, RawMessageDeltaEvent,
+                             RawMessageStartEvent, RawMessageStopEvent,
+                             TextBlock, TextDelta, Usage)
 from anthropic.types.raw_message_delta_event import Delta
 
-from multiroute.config import get_api_key, settings
+from multiroute.config import get_api_key, get_multiroute_base_url
 from multiroute.providers import resolve_model
+
+logger = logging.getLogger(__name__)
 
 
 def _is_multiroute_error(e: Exception) -> bool:
@@ -57,7 +52,7 @@ def _get_shared_openai_client() -> openai.OpenAI:
     global _shared_openai_client
     if _shared_openai_client is None:
         _shared_openai_client = openai.OpenAI(
-            base_url=settings.base_url,
+            base_url=get_multiroute_base_url(),
             api_key=get_api_key(),
             max_retries=0,
         )
@@ -68,7 +63,7 @@ def _get_shared_async_openai_client() -> openai.AsyncOpenAI:
     global _shared_async_openai_client
     if _shared_async_openai_client is None:
         _shared_async_openai_client = openai.AsyncOpenAI(
-            base_url=settings.base_url,
+            base_url=get_multiroute_base_url(),
             api_key=get_api_key(),
             max_retries=0,
         )
@@ -572,7 +567,7 @@ class MultirouteMessages(Messages):
             )
 
             client = _get_shared_openai_client().with_options(
-                base_url=settings.base_url,
+                base_url=get_multiroute_base_url(),
                 api_key=mr_api_key,
                 timeout=self._client.timeout,
             )
@@ -612,7 +607,7 @@ class AsyncMultirouteMessages(AsyncMessages):
             )
 
             client = _get_shared_async_openai_client().with_options(
-                base_url=settings.base_url,
+                base_url=get_multiroute_base_url(),
                 api_key=mr_api_key,
                 timeout=self._client.timeout,
             )
@@ -640,7 +635,7 @@ class Anthropic(anthropic.Anthropic):
         )
         super().__init__(*args, **kwargs)
         if not self.multiroute_api_key:
-            logging.error(
+            logger.error(
                 "MULTIROUTE_API_KEY is not set. Requests will go directly to Anthropic "
                 "without Multiroute high-availability routing.",
             )
@@ -654,7 +649,7 @@ class AsyncAnthropic(anthropic.AsyncAnthropic):
         )
         super().__init__(*args, **kwargs)
         if not self.multiroute_api_key:
-            logging.error(
+            logger.error(
                 "MULTIROUTE_API_KEY is not set. Requests will go directly to Anthropic "
                 "without Multiroute high-availability routing.",
             )

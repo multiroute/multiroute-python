@@ -2,21 +2,19 @@ import copy
 import logging
 
 import httpx
-from litellm.exceptions import (
-    APIConnectionError,
-    APIError,
-    InternalServerError,
-    NotFoundError,
-    ServiceUnavailableError,
-    Timeout,
-)
+from litellm.exceptions import (APIConnectionError, APIError,
+                                InternalServerError, NotFoundError,
+                                ServiceUnavailableError, Timeout)
 
-from multiroute.config import get_api_key, settings
+from multiroute.config import get_api_key, get_multiroute_base_url
 
 try:
     import litellm
 except ImportError:
     litellm = None
+
+
+logger = logging.getLogger(__name__)
 
 
 _MISSING_KEY_MESSAGE = (
@@ -63,11 +61,11 @@ def completion(**kwargs):
 
     mr_api_key = kwargs.pop("multiroute_api_key", None) or get_api_key()
     if not mr_api_key:
-        logging.error(_MISSING_KEY_MESSAGE)
+        logger.error(_MISSING_KEY_MESSAGE)
         return litellm.completion(**kwargs)
 
     mr_kwargs = copy.copy(kwargs)
-    mr_kwargs["api_base"] = settings.base_url
+    mr_kwargs["api_base"] = get_multiroute_base_url()
     mr_kwargs["api_key"] = mr_api_key
     mr_kwargs["custom_llm_provider"] = "openai"
 
@@ -87,11 +85,11 @@ async def acompletion(**kwargs):
 
     mr_api_key = kwargs.pop("multiroute_api_key", None) or get_api_key()
     if not mr_api_key:
-        logging.error(_MISSING_KEY_MESSAGE)
+        logger.error(_MISSING_KEY_MESSAGE)
         return await litellm.acompletion(**kwargs)
 
     mr_kwargs = copy.copy(kwargs)
-    mr_kwargs["api_base"] = settings.base_url
+    mr_kwargs["api_base"] = get_multiroute_base_url()
     mr_kwargs["api_key"] = mr_api_key
     mr_kwargs["custom_llm_provider"] = "openai"
 

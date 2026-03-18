@@ -129,7 +129,8 @@ async def test_async_generate_content_success(client):
     )
 
     response = await client.aio.models.generate_content(
-        model="gemini-2.0-flash", contents="Hi",
+        model="gemini-2.0-flash",
+        contents="Hi",
     )
 
     assert response.text == "Async Multiroute!"
@@ -271,14 +272,16 @@ def test_function_response_contents_translation(client):
     # Multi-turn: user asks, model calls tool, user provides tool result
     contents = [
         types.Content(
-            role="user", parts=[types.Part(text="What is the weather in Paris?")],
+            role="user",
+            parts=[types.Part(text="What is the weather in Paris?")],
         ),
         types.Content(
             role="model",
             parts=[
                 types.Part(
                     function_call=types.FunctionCall(
-                        name="get_weather", args={"location": "Paris"},
+                        name="get_weather",
+                        args={"location": "Paris"},
                     ),
                 ),
             ],
@@ -288,7 +291,8 @@ def test_function_response_contents_translation(client):
             parts=[
                 types.Part(
                     function_response=types.FunctionResponse(
-                        name="get_weather", response={"result": "Sunny, 22°C"},
+                        name="get_weather",
+                        response={"result": "Sunny, 22°C"},
                     ),
                 ),
             ],
@@ -344,7 +348,8 @@ def test_mixed_text_and_function_call_translation(client):
                 types.Part(text="Let me check that for you."),
                 types.Part(
                     function_call=types.FunctionCall(
-                        name="get_weather", args={"location": "London"},
+                        name="get_weather",
+                        args={"location": "London"},
                     ),
                 ),
             ],
@@ -414,7 +419,8 @@ async def test_async_generate_content_no_multiroute_key(client, monkeypatch):
         new=AsyncMock(return_value=native_response),
     ) as mock_native:
         response = await client.aio.models.generate_content(
-            model="gemini-2.0-flash", contents="Hi",
+            model="gemini-2.0-flash",
+            contents="Hi",
         )
 
     assert response.text == "Direct Google async!"
@@ -447,7 +453,8 @@ async def test_async_generate_content_fallback_500(client):
         new=AsyncMock(return_value=native_response),
     ) as mock_native:
         response = await client.aio.models.generate_content(
-            model="gemini-2.0-flash", contents="Hi",
+            model="gemini-2.0-flash",
+            contents="Hi",
         )
 
     assert response.text == "Direct Google async!"
@@ -480,7 +487,8 @@ async def test_async_generate_content_fallback_connection_error(client):
         new=AsyncMock(return_value=native_response),
     ) as mock_native:
         response = await client.aio.models.generate_content(
-            model="gemini-2.0-flash", contents="Hi",
+            model="gemini-2.0-flash",
+            contents="Hi",
         )
 
     assert response.text == "Async fallback after connect error!"
@@ -538,7 +546,8 @@ def test_finish_reason_length_maps_to_max_tokens(client):
     )
 
     response = client.models.generate_content(
-        model="gemini-2.0-flash", contents="Tell me a long story",
+        model="gemini-2.0-flash",
+        contents="Tell me a long story",
     )
 
     assert response.candidates[0].finish_reason == types.FinishReason.MAX_TOKENS
@@ -576,7 +585,8 @@ def test_generate_content_stream_success(client):
 
     chunks = list(
         client.models.generate_content_stream(
-            model="gemini-2.0-flash", contents="Hello!",
+            model="gemini-2.0-flash",
+            contents="Hello!",
         ),
     )
 
@@ -605,7 +615,8 @@ def test_generate_content_stream_fallback_500(client):
             candidates=[
                 types.Candidate(
                     content=types.Content(
-                        role="model", parts=[types.Part(text="Native stream!")],
+                        role="model",
+                        parts=[types.Part(text="Native stream!")],
                     ),
                     finish_reason=types.FinishReason.STOP,
                 ),
@@ -620,7 +631,8 @@ def test_generate_content_stream_fallback_500(client):
     ) as mock_native:
         chunks = list(
             client.models.generate_content_stream(
-                model="gemini-2.0-flash", contents="Hello!",
+                model="gemini-2.0-flash",
+                contents="Hello!",
             ),
         )
 
@@ -658,7 +670,8 @@ def test_generate_content_stream_fallback_connection_error(client):
     ) as mock_native:
         chunks = list(
             client.models.generate_content_stream(
-                model="gemini-2.0-flash", contents="Hello!",
+                model="gemini-2.0-flash",
+                contents="Hello!",
             ),
         )
 
@@ -687,7 +700,8 @@ async def test_async_generate_content_stream_success(client):
     ).mock(return_value=httpx.Response(200, json={}))
 
     stream = await client.aio.models.generate_content_stream(
-        model="gemini-2.0-flash", contents="Hello!",
+        model="gemini-2.0-flash",
+        contents="Hello!",
     )
 
     chunks = []
@@ -731,7 +745,8 @@ async def test_async_generate_content_stream_fallback_500(client):
         new=AsyncMock(return_value=native_async_gen()),
     ) as mock_native:
         stream = await client.aio.models.generate_content_stream(
-            model="gemini-2.0-flash", contents="Hello!",
+            model="gemini-2.0-flash",
+            contents="Hello!",
         )
         chunks = []
         async for chunk in stream:

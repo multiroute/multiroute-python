@@ -1,12 +1,8 @@
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from litellm.exceptions import (
-    APIConnectionError,
-    InternalServerError,
-    NotFoundError,
-    Timeout,
-)
+from litellm.exceptions import (APIConnectionError, InternalServerError,
+                                NotFoundError, Timeout)
 
 from multiroute.litellm import acompletion, completion
 
