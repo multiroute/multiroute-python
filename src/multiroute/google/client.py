@@ -11,7 +11,7 @@ from google.genai import types
 from google.genai._transformers import t_tools
 from google.genai.types import FinishReason, GenerateContentResponseUsageMetadata
 
-from multiroute.config import get_api_key, get_multiroute_base_url
+from multiroute.config import get_multiroute_api_key, get_multiroute_base_url
 from multiroute.providers import resolve_model
 
 logger = logging.getLogger(__name__)
@@ -47,7 +47,7 @@ def _get_shared_openai_client() -> openai.OpenAI:
     if _shared_openai_client is None:
         _shared_openai_client = openai.OpenAI(
             base_url=get_multiroute_base_url(),
-            api_key=get_api_key(),
+            api_key=get_multiroute_api_key(),
             max_retries=0,
         )
     return _shared_openai_client
@@ -58,7 +58,7 @@ def _get_shared_async_openai_client() -> openai.AsyncOpenAI:
     if _shared_async_openai_client is None:
         _shared_async_openai_client = openai.AsyncOpenAI(
             base_url=get_multiroute_base_url(),
-            api_key=get_api_key(),
+            api_key=get_multiroute_api_key(),
             max_retries=0,
         )
     return _shared_async_openai_client
@@ -533,7 +533,7 @@ class MultirouteModels:
     ) -> types.GenerateContentResponse:
         mr_api_key = kwargs.pop("multiroute_api_key", None)
         if mr_api_key is None:
-            mr_api_key = get_api_key()
+            mr_api_key = get_multiroute_api_key()
 
         if not mr_api_key:
             return self._original_generate_content(
@@ -579,7 +579,7 @@ class MultirouteModels:
     ) -> Iterator[types.GenerateContentResponse]:
         mr_api_key = kwargs.pop("multiroute_api_key", None)
         if mr_api_key is None:
-            mr_api_key = get_api_key()
+            mr_api_key = get_multiroute_api_key()
 
         if not mr_api_key:
             return self._original_generate_content_stream(
@@ -631,7 +631,7 @@ class AsyncMultirouteModels:
     ) -> types.GenerateContentResponse:
         mr_api_key = kwargs.pop("multiroute_api_key", None)
         if mr_api_key is None:
-            mr_api_key = get_api_key()
+            mr_api_key = get_multiroute_api_key()
 
         if not mr_api_key:
             return await self._original_generate_content(
@@ -677,7 +677,7 @@ class AsyncMultirouteModels:
     ) -> AsyncIterator[types.GenerateContentResponse]:
         mr_api_key = kwargs.pop("multiroute_api_key", None)
         if mr_api_key is None:
-            mr_api_key = get_api_key()
+            mr_api_key = get_multiroute_api_key()
 
         if not mr_api_key:
             return await self._original_generate_content_stream(
@@ -717,7 +717,7 @@ class AsyncMultirouteModels:
 class Client(genai.Client):
     def __init__(self, *args, **kwargs):
         self.multiroute_api_key = (
-            kwargs.pop("multiroute_api_key", None) or get_api_key()
+            kwargs.pop("multiroute_api_key", None) or get_multiroute_api_key()
         )
         super().__init__(*args, **kwargs)
         if not self.multiroute_api_key:

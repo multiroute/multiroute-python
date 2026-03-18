@@ -6,7 +6,7 @@ from typing import Any
 
 import openai
 
-from multiroute.config import get_api_key, get_multiroute_base_url
+from multiroute.config import get_multiroute_api_key, get_multiroute_base_url
 from multiroute.openai.client import _is_multiroute_error
 from multiroute.providers import resolve_model
 
@@ -144,7 +144,7 @@ class Agent(_BaseAgent):  # type: ignore[misc]
     """
 
     def __init__(self, model: Any = None, **kwargs: Any) -> None:
-        mr_api_key = kwargs.pop("multiroute_api_key", None) or get_api_key()
+        mr_api_key = kwargs.pop("multiroute_api_key", None) or get_multiroute_api_key()
 
         if not mr_api_key:
             super().__init__(model, **kwargs)

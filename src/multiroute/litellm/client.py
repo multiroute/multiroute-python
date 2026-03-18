@@ -11,7 +11,7 @@ from litellm.exceptions import (
     Timeout,
 )
 
-from multiroute.config import get_api_key, get_multiroute_base_url
+from multiroute.config import get_multiroute_api_key, get_multiroute_base_url
 
 try:
     import litellm
@@ -64,7 +64,7 @@ def completion(**kwargs):
             "litellm is not installed. Please install it with `pip install litellm`.",
         )
 
-    mr_api_key = kwargs.pop("multiroute_api_key", None) or get_api_key()
+    mr_api_key = kwargs.pop("multiroute_api_key", None) or get_multiroute_api_key()
     if not mr_api_key:
         logger.error(_MISSING_KEY_MESSAGE)
         return litellm.completion(**kwargs)
@@ -88,7 +88,7 @@ async def acompletion(**kwargs):
             "litellm is not installed. Please install it with `pip install litellm`.",
         )
 
-    mr_api_key = kwargs.pop("multiroute_api_key", None) or get_api_key()
+    mr_api_key = kwargs.pop("multiroute_api_key", None) or get_multiroute_api_key()
     if not mr_api_key:
         logger.error(_MISSING_KEY_MESSAGE)
         return await litellm.acompletion(**kwargs)

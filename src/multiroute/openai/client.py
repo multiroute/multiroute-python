@@ -6,7 +6,7 @@ from openai.resources.chat.completions import AsyncCompletions as AsyncChatCompl
 from openai.resources.chat.completions import Completions as ChatCompletions
 from openai.resources.responses import AsyncResponses, Responses
 
-from multiroute.config import get_api_key, get_multiroute_base_url
+from multiroute.config import get_multiroute_api_key, get_multiroute_base_url
 from multiroute.providers import resolve_model
 
 logger = logging.getLogger(__name__)
@@ -26,7 +26,7 @@ class MultirouteChatCompletions(ChatCompletions):
     def create(self, **kwargs) -> Any:
         mr_api_key = kwargs.pop("multiroute_api_key", None)
         if mr_api_key is None:
-            mr_api_key = get_api_key()
+            mr_api_key = get_multiroute_api_key()
 
         if not mr_api_key:
             return super().create(**kwargs)
@@ -54,7 +54,7 @@ class AsyncMultirouteChatCompletions(AsyncChatCompletions):
     async def create(self, **kwargs) -> Any:
         mr_api_key = kwargs.pop("multiroute_api_key", None)
         if mr_api_key is None:
-            mr_api_key = get_api_key()
+            mr_api_key = get_multiroute_api_key()
 
         if not mr_api_key:
             return await super().create(**kwargs)
@@ -83,7 +83,7 @@ class MultirouteResponses(Responses):
     def create(self, **kwargs) -> Any:
         mr_api_key = kwargs.pop("multiroute_api_key", None)
         if mr_api_key is None:
-            mr_api_key = get_api_key()
+            mr_api_key = get_multiroute_api_key()
 
         if not mr_api_key:
             return super().create(**kwargs)
@@ -111,7 +111,7 @@ class AsyncMultirouteResponses(AsyncResponses):
     async def create(self, **kwargs) -> Any:
         mr_api_key = kwargs.pop("multiroute_api_key", None)
         if mr_api_key is None:
-            mr_api_key = get_api_key()
+            mr_api_key = get_multiroute_api_key()
 
         if not mr_api_key:
             return await super().create(**kwargs)
@@ -138,7 +138,7 @@ class AsyncMultirouteResponses(AsyncResponses):
 class OpenAI(openai.OpenAI):
     def __init__(self, *args, **kwargs):
         self.multiroute_api_key = (
-            kwargs.pop("multiroute_api_key", None) or get_api_key()
+            kwargs.pop("multiroute_api_key", None) or get_multiroute_api_key()
         )
         super().__init__(*args, **kwargs)
         # Ensure resources are re-assigned after super().__init__
@@ -154,7 +154,7 @@ class OpenAI(openai.OpenAI):
 class AsyncOpenAI(openai.AsyncOpenAI):
     def __init__(self, *args, **kwargs):
         self.multiroute_api_key = (
-            kwargs.pop("multiroute_api_key", None) or get_api_key()
+            kwargs.pop("multiroute_api_key", None) or get_multiroute_api_key()
         )
         super().__init__(*args, **kwargs)
         # Ensure resources are re-assigned after super().__init__

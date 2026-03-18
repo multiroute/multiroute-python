@@ -24,7 +24,7 @@ from anthropic.types import (
 )
 from anthropic.types.raw_message_delta_event import Delta
 
-from multiroute.config import get_api_key, get_multiroute_base_url
+from multiroute.config import get_multiroute_api_key, get_multiroute_base_url
 from multiroute.providers import resolve_model
 
 logger = logging.getLogger(__name__)
@@ -60,7 +60,7 @@ def _get_shared_openai_client() -> openai.OpenAI:
     if _shared_openai_client is None:
         _shared_openai_client = openai.OpenAI(
             base_url=get_multiroute_base_url(),
-            api_key=get_api_key(),
+            api_key=get_multiroute_api_key(),
             max_retries=0,
         )
     return _shared_openai_client
@@ -71,7 +71,7 @@ def _get_shared_async_openai_client() -> openai.AsyncOpenAI:
     if _shared_async_openai_client is None:
         _shared_async_openai_client = openai.AsyncOpenAI(
             base_url=get_multiroute_base_url(),
-            api_key=get_api_key(),
+            api_key=get_multiroute_api_key(),
             max_retries=0,
         )
     return _shared_async_openai_client
@@ -560,7 +560,7 @@ class MultirouteMessages(Messages):
     def create(self, **kwargs) -> Any:
         mr_api_key = kwargs.pop("multiroute_api_key", None)
         if mr_api_key is None:
-            mr_api_key = get_api_key()
+            mr_api_key = get_multiroute_api_key()
 
         if not mr_api_key:
             return super().create(**kwargs)
@@ -600,7 +600,7 @@ class AsyncMultirouteMessages(AsyncMessages):
     async def create(self, **kwargs) -> Any:
         mr_api_key = kwargs.pop("multiroute_api_key", None)
         if mr_api_key is None:
-            mr_api_key = get_api_key()
+            mr_api_key = get_multiroute_api_key()
 
         if not mr_api_key:
             return await super().create(**kwargs)
@@ -638,7 +638,7 @@ class AsyncMultirouteMessages(AsyncMessages):
 class Anthropic(anthropic.Anthropic):
     def __init__(self, *args, **kwargs):
         self.multiroute_api_key = (
-            kwargs.pop("multiroute_api_key", None) or get_api_key()
+            kwargs.pop("multiroute_api_key", None) or get_multiroute_api_key()
         )
         super().__init__(*args, **kwargs)
         if not self.multiroute_api_key:
@@ -652,7 +652,7 @@ class Anthropic(anthropic.Anthropic):
 class AsyncAnthropic(anthropic.AsyncAnthropic):
     def __init__(self, *args, **kwargs):
         self.multiroute_api_key = (
-            kwargs.pop("multiroute_api_key", None) or get_api_key()
+            kwargs.pop("multiroute_api_key", None) or get_multiroute_api_key()
         )
         super().__init__(*args, **kwargs)
         if not self.multiroute_api_key:

@@ -11,6 +11,6 @@ def get_multiroute_base_url() -> str:
     return os.environ.get("MULTIROUTE_BASE_URL") or MULTIROUTE_BASE_URL
 
 
-def get_api_key() -> Optional[str]:
+def get_multiroute_api_key() -> Optional[str]:
     """Return the Multiroute API key, read from ``os.environ`` at call time."""
     return os.environ.get("MULTIROUTE_API_KEY") or None
